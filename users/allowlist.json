@@ -1,0 +1,7 @@
+{
+  "users": [
+    {"name": "Kevin",   "chat_id": 657664020, "owner": true, "data_dir": ".tmp"},
+    {"name": "Nicolas", "chat_id": 93331013,  "owner": false, "data_dir": "users/Nicolas/data"},
+    {"name": "Kelvin", "chat_id": 464964858,  "owner": false, "data_dir": "users/Kelvin/data"}
+  ]
+}

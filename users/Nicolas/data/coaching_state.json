@@ -1,0 +1,30 @@
+{
+  "active_goal": {
+    "race_name": "Higashine Sakuranbo 5K",
+    "race_distance_km": 5,
+    "race_date": "2026-06-07",
+    "target_time": "0:44:00",
+    "prior_pr": null
+  },
+  "methodology": {
+    "current_phase": "base",
+    "phase_start_date": "2026-05-07",
+    "phase_methodology": "80-20",
+    "phase_history": [
+      { "phase": "base", "method": "80-20", "weeks": "1-2" },
+      { "phase": "build", "method": "80-20", "weeks": "3-4" },
+      { "phase": "taper", "method": "taper", "weeks": "5" }
+    ]
+  },
+  "preferences": {
+    "long_run_day": null,
+    "off_limit_days": [],
+    "race_day_before": "easy 2km shakeout",
+    "training_days_per_week": "2-3",
+    "suggested_days": ["Tuesday", "Thursday", "Saturday"],
+    "hr_monitor": false,
+    "device": "Amazfit"
+  },
+  "last_check_in_date": "2026-05-06",
+  "plan_sheet_tab": "Plan - Nicolas - Higashine 5K - 2026-06-07"
+}

@@ -1,0 +1,33 @@
+{
+  "skill_name": "running-coach",
+  "evals": [
+    {
+      "id": 0,
+      "name": "half-marathon-goal-with-realism-check",
+      "prompt": "I want to do the Standard Chartered Hong Kong half marathon in February 2026 — think I can break 1:45?",
+      "expected_output": "Skill triggers, asks for/confirms the missing fields (prior PR, motivation), reads .tmp/fitness_baseline.json (or halts if missing), runs the realism gate, presents the gap if any, offers the three negotiation paths (extend / downgrade / proceed-aggressively), waits for choice, then proposes a methodology with justification. Does NOT silently generate a plan without the realism conversation. Should also flag that tools/sheets_write.py is not yet built when it gets to the output step.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "weekly-shuffle-around-travel",
+      "prompt": "Plan looks fine but I'm flying to Tokyo next Tue–Thu, can we shuffle the week?",
+      "expected_output": "Skill triggers (this is multi-day plan-impacting work, NOT a single-run debrief). Reads coaching_state.json for current phase. Proposes a reshuffled week that: preserves long run (probably moves to Saturday), compresses or relocates quality session(s), maintains hard/easy alternation (no two hard days in a row), accepts lower volume that week without compensation in the next week. Confirms before writing to Sheets.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "race-week-taper-anxiety",
+      "prompt": "Race is in 9 days — am I tapering right? Feels like I'm losing fitness.",
+      "expected_output": "Skill triggers. Recognizes race-week guard is active (T-9). Validates current taper against the protocol in references/taper-protocols.md. Reassures that taper-flat anxiety is normal and expected (neuromuscular detraining + glycogen supercompensation). Refuses to add work to 'fix the feeling.' Confirms day-before plan and any race-day prep details. Does NOT propose methodology changes or major plan revisions this close to race day.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "compounded-injury-and-missed-weeks",
+      "prompt": "Haven't run in 3 weeks, hurt my knee. Marathon's still 14 weeks out — am I cooked?",
+      "expected_output": "Skill triggers. Recognizes the compounded edge case: 3+ weeks missed (per §12: re-run baseline, regenerate plan, likely extend timeline) + returning from injury (MAF for 2–3 weeks). Honest assessment of marathon goal viability with 14 weeks and 3 weeks lost. Proposes: re-run initial_fitness_assessment, MAF block for first 2–3 weeks of return, re-baseline, then decide whether to keep marathon goal or downgrade. Surfaces the realism conversation rather than blindly continuing the old plan.",
+      "files": []
+    }
+  ]
+}

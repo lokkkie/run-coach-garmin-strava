@@ -1,0 +1,10 @@
+garminconnect
+fitparse
+google-auth
+google-auth-oauthlib
+google-api-python-client
+icalendar
+python-dotenv
+requests
+python-telegram-bot
+claude-agent-sdk

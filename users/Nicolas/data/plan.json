@@ -1,0 +1,172 @@
+{
+  "plan_metadata": {
+    "race_name": "Higashine Sakuranbo 5K",
+    "race_distance_km": 5,
+    "race_date": "2026-06-07",
+    "target_time": "0:44:00",
+    "user_name": "Nicolas",
+    "methodology_choices": [
+      { "weeks": "1-2", "method": "80-20", "phase": "base" },
+      { "weeks": "3-4", "method": "80-20", "phase": "build" },
+      { "weeks": "5", "method": "taper", "phase": "taper" }
+    ],
+    "generated_date": "2026-05-06",
+    "baseline_used": "manual - current 5K 50:00, 2-3 days/week, Amazfit watch, no HR monitor"
+  },
+  "sessions": [
+    {
+      "week": 1,
+      "date": "2026-05-07",
+      "day": "Thu",
+      "session_type": "Easy",
+      "distance_km": 3.0,
+      "pace_target": "10:30-11:30",
+      "hr_zone": "",
+      "description": "Easy 3km — conversational pace throughout",
+      "notes": "RPE 4-5/10. If you can't hold a full sentence, slow down."
+    },
+    {
+      "week": 1,
+      "date": "2026-05-09",
+      "day": "Sat",
+      "session_type": "Easy",
+      "distance_km": 3.0,
+      "pace_target": "10:30-11:30",
+      "hr_zone": "",
+      "description": "Easy 3km — same effort as Thursday",
+      "notes": "Keep it comfortable. Aerobic foundation."
+    },
+    {
+      "week": 2,
+      "date": "2026-05-11",
+      "day": "Mon",
+      "session_type": "Easy",
+      "distance_km": 4.0,
+      "pace_target": "10:30-11:00",
+      "hr_zone": "",
+      "description": "Easy 4km — building aerobic base",
+      "notes": "RPE 4-5/10. Conversational the whole way."
+    },
+    {
+      "week": 2,
+      "date": "2026-05-14",
+      "day": "Thu",
+      "session_type": "Race-Pace",
+      "distance_km": 5.0,
+      "pace_target": "8:48",
+      "hr_zone": "",
+      "description": "1km easy + 4×2min @ 8:48/km with 90s walk recovery + 1km easy cooldown",
+      "notes": "RPE 7/10 for the fast intervals. Hard but controlled — not sprinting. This is your target race pace."
+    },
+    {
+      "week": 2,
+      "date": "2026-05-16",
+      "day": "Sat",
+      "session_type": "Easy",
+      "distance_km": 3.0,
+      "pace_target": "10:30-11:30",
+      "hr_zone": "",
+      "description": "Easy 3km recovery run",
+      "notes": "Flush out stiffness from Thursday. Very easy."
+    },
+    {
+      "week": 3,
+      "date": "2026-05-19",
+      "day": "Tue",
+      "session_type": "Easy",
+      "distance_km": 5.0,
+      "pace_target": "10:00-11:00",
+      "hr_zone": "",
+      "description": "Easy 5km — longest easy run of the cycle",
+      "notes": "Still conversational. Time on feet matters more than pace."
+    },
+    {
+      "week": 3,
+      "date": "2026-05-21",
+      "day": "Thu",
+      "session_type": "Race-Pace",
+      "distance_km": 5.0,
+      "pace_target": "8:48",
+      "hr_zone": "",
+      "description": "Race simulation — run 5km targeting 44-45 min",
+      "notes": "Start at 9:00/km for first km, settle into 8:48/km. This is your progress check — see how close to 44 min you can get."
+    },
+    {
+      "week": 3,
+      "date": "2026-05-23",
+      "day": "Sat",
+      "session_type": "Easy",
+      "distance_km": 3.0,
+      "pace_target": "10:30-11:30",
+      "hr_zone": "",
+      "description": "Easy 3km recovery",
+      "notes": "Shake out after Thursday's simulation. Keep it gentle."
+    },
+    {
+      "week": 4,
+      "date": "2026-05-26",
+      "day": "Tue",
+      "session_type": "Easy",
+      "distance_km": 4.0,
+      "pace_target": "10:00-11:00",
+      "hr_zone": "",
+      "description": "Easy 4km — start of taper",
+      "notes": "Volume starts coming down. Keep the effort easy."
+    },
+    {
+      "week": 4,
+      "date": "2026-05-28",
+      "day": "Thu",
+      "session_type": "Race-Pace",
+      "distance_km": 4.0,
+      "pace_target": "8:48",
+      "hr_zone": "",
+      "description": "2km easy + 1.5km @ race pace (8:48/km) + 0.5km easy",
+      "notes": "Confidence builder. Race pace should feel familiar by now. Don't push past 8:48."
+    },
+    {
+      "week": 4,
+      "date": "2026-05-30",
+      "day": "Sat",
+      "session_type": "Easy",
+      "distance_km": 3.0,
+      "pace_target": "10:30-11:30",
+      "hr_zone": "",
+      "description": "Easy 3km — light and relaxed",
+      "notes": "Taper mode. Resist the urge to do more."
+    },
+    {
+      "week": 5,
+      "date": "2026-06-02",
+      "day": "Tue",
+      "session_type": "Strides",
+      "distance_km": 2.5,
+      "pace_target": "7:30-8:00",
+      "hr_zone": "",
+      "description": "2km easy + 4×30s strides (fast but not sprinting) + walk back to start",
+      "notes": "Strides keep legs sharp without depleting. Run tall, quick turnover. Not about distance."
+    },
+    {
+      "week": 5,
+      "date": "2026-06-05",
+      "day": "Fri",
+      "session_type": "Easy",
+      "distance_km": 2.0,
+      "pace_target": "10:30-11:30",
+      "hr_zone": "",
+      "description": "Shakeout — 2km very easy",
+      "notes": "Just to move the legs. If they feel flat or heavy, that is completely normal pre-race."
+    },
+    {
+      "week": 5,
+      "date": "2026-06-07",
+      "day": "Sun",
+      "session_type": "Race",
+      "distance_km": 5.0,
+      "pace_target": "8:48",
+      "hr_zone": "",
+      "description": "RACE — Higashine Sakuranbo 5K — Target: 44:00",
+      "notes": "Start at 9:00/km for km 1. Settle into 8:48 by km 2. If feeling good at km 4, push the final km. Enjoy the cherry festival!"
+    }
+  ]
+}

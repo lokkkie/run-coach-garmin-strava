@@ -1,0 +1,19 @@
+{
+  "assessment_date": "2026-05-06",
+  "assessment_method": "manual - user reported",
+  "starting_weekly_km": 5,
+  "peak_weekly_km": 5,
+  "longest_run_km": 5,
+  "easy_pace_target": "10:30",
+  "tempo_pace_target": null,
+  "estimated_race_pace": "10:00",
+  "pace_trend": "unknown",
+  "avg_hr": null,
+  "avg_cadence_spm": null,
+  "consistency_weeks_with_runs": "unknown",
+  "current_5k_time": "50:00",
+  "target_5k_time": "44:00",
+  "device": "Amazfit (not Garmin - no automated data pull)",
+  "training_days_per_week": "2-3",
+  "injuries": "none reported"
+}

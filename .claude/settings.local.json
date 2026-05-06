@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:cloud.ouraring.com)",
+      "WebSearch",
+      "Bash(pip install *)",
+      "Bash(npm --version)",
+      "PowerShell($userPath = [Environment]::GetEnvironmentVariable\\('Path','User'\\); if \\($userPath -match [regex]::Escape\\('.bun\\\\bin'\\)\\) { Write-Output \"USER PATH contains .bun\\\\bin \\(will work in NEW shells\\)\" } else { Write-Output \"USER PATH does NOT contain .bun\\\\bin\" }; Write-Output \"---\"; Write-Output $userPath)",
+      "PowerShell(bun *)"
+    ]
+  }
+}
