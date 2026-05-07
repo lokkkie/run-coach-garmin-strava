@@ -2,6 +2,7 @@
 credentials.json
 token.json
 .tmp/
+users/contact_log.json
 __pycache__/
 *.pyc
 *.pyo

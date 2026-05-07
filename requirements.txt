@@ -7,4 +7,5 @@ icalendar
 python-dotenv
 requests
 python-telegram-bot
+truststore
 claude-agent-sdk

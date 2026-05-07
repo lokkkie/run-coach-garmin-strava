@@ -67,9 +67,9 @@ You should get a message in Telegram. If not, double-check the token + chat ID.
 ### Actions tab
 - New...
 - Action: **Start a program**
-- Program/script: `C:\Users\Kevin Lok\AppData\Local\Programs\Python\Python310\python.exe`
+- Program/script: run `where python` in PowerShell to find your Python path (e.g. `C:\Users\<YourName>\AppData\Local\Programs\Python\Python3XX\python.exe` or the Windows Store install at `C:\Users\<YourName>\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe`)
 - Add arguments: `tools\polling_check.py`
-- Start in: `c:\sandbox\Agentic\Run Coach`
+- Start in: path to this project root (e.g. `C:\path\to\run-coach-garmin-strava`)
 - OK
 
 ### Conditions tab
@@ -90,27 +90,34 @@ Right-click the task → **Run**. Check `.tmp/polling_check.log` (or look at las
 
 ## 3. Telegram Bridge — Auto-Start on Boot (5 min)
 
-The bridge needs to run continuously so your bot is always responsive.
+The bridge needs to run continuously so your bot is always responsive. We launch it via `tools\bridge_supervisor.py` — a tiny wrapper that:
+
+- Restarts the bridge automatically if it crashes (5s backoff)
+- Handles the `/restart` admin command cleanly (bridge exits with code 42 → supervisor respawns it)
+- Stops cleanly when the bridge exits with code 0 (Ctrl+C / shutdown)
 
 ### Option A: Startup Folder (simplest)
 
 1. Press `Win+R` → type `shell:startup` → Enter
 2. This opens your Startup folder. Right-click → **New → Shortcut**
-3. Location: paste this entire line:
+3. Location: paste this entire line, replacing the Python path with yours (run `where python` in PowerShell to find it):
    ```
-   "C:\Users\Kevin Lok\AppData\Local\Programs\Python\Python310\pythonw.exe" "c:\sandbox\Agentic\Run Coach\tools\telegram_bridge.py"
+   "C:\Users\<YourName>\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\pythonw.exe" "C:\path\to\run-coach-garmin-strava\tools\bridge_supervisor.py"
    ```
    Note: `pythonw.exe` (not `python.exe`) runs without a console window.
 4. Name: `Run Coach Telegram Bridge`
 5. Click Finish
+6. Right-click the shortcut you just created → **Properties**
+7. In the **Start in** field, enter the full path to your project root (e.g. `C:\path\to\run-coach-garmin-strava`)
+8. Click OK
 
-That shortcut will launch the bridge silently every time you log in.
+That shortcut will launch the supervisor silently every time you log in. The supervisor in turn launches the bridge and keeps it alive.
 
 ### Option B: Task Scheduler (more robust — recommended if you reboot rarely)
 
 Same steps as the polling task, but:
 - Triggers: **At log on** of your user, no schedule
-- Actions: program `pythonw.exe`, arguments `tools\telegram_bridge.py`, start in project dir
+- Actions: program `pythonw.exe`, arguments `tools\bridge_supervisor.py`, start in project dir
 - Conditions: uncheck "Start only if on AC power"
 - Settings: ☐ Stop the task if it runs longer than (uncheck — bridge runs forever)
 
@@ -118,9 +125,11 @@ Same steps as the polling task, but:
 
 You don't need to reboot to start it now. Just run:
 ```powershell
-python tools\telegram_bridge.py
+python tools\bridge_supervisor.py
 ```
-You should see `Bridge ready. Send messages to your bot.` Open Telegram on your phone, message your bot, and watch the response come back. Once confirmed, kill the manual run (Ctrl+C) and rely on auto-start.
+You should see supervisor log lines, then `Bridge ready. Slash commands registered.` from the bridge itself. Open Telegram on your phone, message your bot, and watch the response come back. Once confirmed, kill the manual run (Ctrl+C — both supervisor and bridge stop) and rely on auto-start.
+
+You can still run the bridge directly without the supervisor (`python tools\telegram_bridge.py`) for one-off debugging — `/restart` will fall back to a self-relaunch path in that case, with a brief warning in its reply.
 
 ---
 
@@ -174,4 +183,24 @@ Each Telegram conversation calls the Anthropic API. Monitor at https://console.a
 ## 6. Disabling / Pausing
 
 - Pause polling: open Task Scheduler → right-click task → **Disable**
-- Stop the bridge: close the `pythonw.exe` process in Task Manager (or remove it from startup folder)
+- Stop the bridge: close the `pythonw.exe` process in Task Manager (or remove it from startup folder). If you're running under the supervisor, kill the supervisor process — it'll stop the bridge child along with it.
+
+---
+
+## 7. Owner Admin Commands
+
+These commands work from Telegram for any user with `"owner": true` in `users/allowlist.json`. They are intentionally **not** registered in Telegram's slash-command menu — non-owners get no reply at all when they try them, so the commands' existence isn't leaked.
+
+| Command | What it does |
+| --- | --- |
+| `/contacts` | List **pending** contacts (everyone who has ever messaged the bot but isn't yet on the allowlist), sorted by most recent. Shows chat_id, name, message/command counts, last seen. |
+| `/contacts all` | Same as above but includes already-authorized users. |
+| `/allow <chat_id> <name>` | Add a user to the allowlist. Creates `users/<name>/data/` so onboarding can begin. Name must be `[A-Za-z0-9_-]+`. |
+| `/revoke <chat_id>` | Remove a user from the allowlist. Tears down their in-memory Claude session. Refuses to remove the last remaining owner (safety rail — promote another user to owner in `allowlist.json` first if you want to do that). Their data dir is left in place. |
+| `/restart` | Restart the bridge process. Under the supervisor: bridge exits with code 42, supervisor respawns it. Without the supervisor: bridge spawns a detached child and exits, with a brief race window where both processes briefly poll Telegram. |
+
+**Typical onboarding flow for a new user:**
+1. They message the bot — bot replies "you're not authorized" but logs them to `users/contact_log.json`
+2. You run `/contacts` to see them in the pending list, copy their chat_id
+3. You run `/allow 123456789 Alice`
+4. They run `/start` and the `telegram-onboarding` skill takes over from there

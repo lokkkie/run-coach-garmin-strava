@@ -21,13 +21,26 @@ Users with "owner": true may edit project code/files; others get coaching Q&A + 
 import asyncio
 import json
 import os
+import re
+import subprocess
 import sys
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
+# TLS trust: use the OS certificate store (Windows cert store / macOS Keychain /
+# Linux system bundle) instead of httpx's built-in store. Required on Python 3.14
+# + httpx 0.28 on Windows, where the default SSL context can't find a usable CA
+# bundle and every Telegram request fails with CERTIFICATE_VERIFY_FAILED.
+# Must run BEFORE httpx/telegram imports so they pick up the injected SSL context.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 from dotenv import load_dotenv
-from telegram import BotCommand, Update
+from telegram import BotCommand, BotCommandScopeChat, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -39,12 +52,12 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
-# Allow importing sibling tools
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sheets_read import read_sessions  # noqa: E402
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path.cwd()
 load_dotenv(PROJECT_ROOT / ".env")
+
+# Allow importing sibling tools
+sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+from sheets_read import read_sessions  # noqa: E402
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -58,6 +71,17 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 MAX_TG_LEN = 4000  # Telegram per-message limit is 4096; leave headroom
 
 ALLOWLIST_PATH = PROJECT_ROOT / "users" / "allowlist.json"
+CONTACT_LOG_PATH = PROJECT_ROOT / "users" / "contact_log.json"
+
+_contact_log_lock = asyncio.Lock()
+_allowlist_lock = asyncio.Lock()
+
+# Sentinel exit code: tells bridge_supervisor.py to relaunch the bridge.
+# Code 0 = clean shutdown (supervisor stops); any other code = crash (supervisor
+# backs off and respawns). 42 specifically signals "intentional restart".
+RESTART_EXIT_CODE = 42
+
+_NAME_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def load_allowlist() -> list[dict]:
@@ -65,11 +89,78 @@ def load_allowlist() -> list[dict]:
         return json.load(f)["users"]
 
 
+def save_allowlist(users: list[dict]) -> None:
+    """Atomic rewrite of allowlist.json (.tmp + replace, same pattern as contact_log)."""
+    ALLOWLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = ALLOWLIST_PATH.with_suffix(".json.tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump({"users": users}, f, indent=2, ensure_ascii=False)
+    tmp_path.replace(ALLOWLIST_PATH)
+
+
 def get_user(chat_id: str) -> dict | None:
     for user in load_allowlist():
         if str(user["chat_id"]) == chat_id:
             return user
     return None
+
+
+async def record_contact(update: Update, command: str | None = None) -> None:
+    """Update the contact log with metadata for whoever sent this update.
+
+    Tracks every chat that reaches the bot — authorized or not — so we have a
+    record of who has tried to interact for future expansion of access. Stored
+    at users/contact_log.json (gitignored). Lock-serialized; the file is
+    rewritten atomically via a .tmp + replace.
+    """
+    if update.effective_user is None or update.effective_chat is None:
+        return
+
+    user = update.effective_user
+    chat_id = str(update.effective_chat.id)
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    authorized = get_user(chat_id) is not None
+
+    async with _contact_log_lock:
+        if CONTACT_LOG_PATH.exists():
+            try:
+                with open(CONTACT_LOG_PATH, encoding="utf-8") as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                data = {"contacts": []}
+        else:
+            CONTACT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            data = {"contacts": []}
+
+        contacts = data.setdefault("contacts", [])
+        record = next((c for c in contacts if c.get("chat_id") == chat_id), None)
+        if record is None:
+            record = {
+                "chat_id": chat_id,
+                "user_id": user.id,
+                "first_seen": now_iso,
+                "message_count": 0,
+                "command_count": 0,
+            }
+            contacts.append(record)
+
+        record["username"] = user.username
+        record["first_name"] = user.first_name
+        record["last_name"] = user.last_name
+        record["language_code"] = user.language_code
+        record["is_bot"] = user.is_bot
+        record["last_seen"] = now_iso
+        record["authorized"] = authorized
+        if command:
+            record["command_count"] = record.get("command_count", 0) + 1
+            record["last_command"] = command
+        else:
+            record["message_count"] = record.get("message_count", 0) + 1
+
+        tmp_path = CONTACT_LOG_PATH.with_suffix(".json.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        tmp_path.replace(CONTACT_LOG_PATH)
 
 
 _TELEGRAM_FORMATTING = """
@@ -243,6 +334,14 @@ def is_authorized(update: Update) -> bool:
             and get_user(str(update.effective_chat.id)) is not None)
 
 
+def is_owner(update: Update) -> bool:
+    """True iff the chat belongs to a user with `owner: true` in the allowlist."""
+    if update.effective_chat is None:
+        return False
+    user = get_user(str(update.effective_chat.id))
+    return bool(user and user.get("owner"))
+
+
 def get_plan_tab(user: dict) -> str:
     """Read the active plan tab name from the user's coaching_state.json."""
     state_file = PROJECT_ROOT / user["data_dir"] / "coaching_state.json"
@@ -317,6 +416,7 @@ def find_current_week(all_sessions: list[dict], today_iso: str) -> int | None:
 # Slash command handlers
 # ──────────────────────────────────────────────────────────────────────
 async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await record_contact(update, command="today")
     if not is_authorized(update):
         return
     user = get_user(str(update.effective_chat.id))
@@ -338,6 +438,7 @@ async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await record_contact(update, command="week")
     if not is_authorized(update):
         return
     user = get_user(str(update.effective_chat.id))
@@ -368,6 +469,7 @@ async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_next(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await record_contact(update, command="next")
     if not is_authorized(update):
         return
     user = get_user(str(update.effective_chat.id))
@@ -394,6 +496,7 @@ async def cmd_next(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await record_contact(update, command="plan")
     if not is_authorized(update):
         return
     user = get_user(str(update.effective_chat.id))
@@ -414,6 +517,7 @@ async def cmd_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Onboarding command — triggers the running-coach skill's goal intake flow."""
+    await record_contact(update, command="start")
     if not is_authorized(update):
         await update.message.reply_text("You're not authorized to use this bot.")
         return
@@ -449,6 +553,259 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Owner-only admin commands
+#
+# These are NOT registered in set_my_commands, so they don't appear in
+# Telegram's slash-command menu. They still work when typed directly.
+# Non-owners get no reply at all so the commands' existence isn't leaked
+# (unauthorized users probing slash commands see total silence, exactly
+# like sending a normal message would).
+# ──────────────────────────────────────────────────────────────────────
+async def cmd_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """List recent contacts. Default: pending (unauthorized) only. Pass `all` to dump everyone."""
+    await record_contact(update, command="contacts")
+    if not is_owner(update):
+        return
+
+    args = context.args or []
+    show_all = bool(args) and args[0].lower() == "all"
+
+    if not CONTACT_LOG_PATH.exists():
+        await update.message.reply_text("(contact log is empty)")
+        return
+    try:
+        with open(CONTACT_LOG_PATH, encoding="utf-8") as f:
+            contacts = json.load(f).get("contacts", [])
+    except (json.JSONDecodeError, OSError) as e:
+        await update.message.reply_text(f"⚠️ Couldn't read contact log: {e}")
+        return
+
+    if not show_all:
+        contacts = [c for c in contacts if not c.get("authorized")]
+    contacts.sort(key=lambda c: c.get("last_seen", ""), reverse=True)
+
+    if not contacts:
+        await update.message.reply_text(
+            "No pending contacts." if not show_all else "No contacts on record."
+        )
+        return
+
+    header_label = "All contacts" if show_all else "Pending contacts"
+    lines = [f"<b>📇 {header_label} ({len(contacts)})</b>", ""]
+    for c in contacts[:30]:
+        first = (c.get("first_name") or "").strip()
+        last = (c.get("last_name") or "").strip()
+        display = (f"{first} {last}".strip()
+                   or c.get("username")
+                   or "?")
+        badge = "✅" if c.get("authorized") else "⏳"
+        lines.append(f"{badge} <code>{c.get('chat_id', '?')}</code> · <b>{display}</b>")
+        extras = []
+        if c.get("username"):
+            extras.append(f"@{c['username']}")
+        extras.append(f"msgs={c.get('message_count', 0)}")
+        extras.append(f"cmds={c.get('command_count', 0)}")
+        last_seen = (c.get("last_seen") or "")[:16]
+        if last_seen:
+            extras.append(f"last={last_seen}")
+        lines.append("    " + " · ".join(extras))
+    if len(contacts) > 30:
+        lines.append(f"\n…and {len(contacts) - 30} more.")
+    if not show_all:
+        lines.append("\n<i>Use</i> <code>/contacts all</code> <i>to see everyone, including authorized users.</i>")
+
+    await send_with_fallback(update.message, "\n".join(lines))
+    log.info("/contacts served (%s, %d entries)", "all" if show_all else "pending", len(contacts))
+
+
+async def cmd_allow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Add a chat_id to the allowlist. Usage: /allow <chat_id> <name>"""
+    await record_contact(update, command="allow")
+    if not is_owner(update):
+        return
+
+    args = context.args or []
+    if len(args) < 2:
+        await send_with_fallback(
+            update.message,
+            "Usage: <code>/allow &lt;chat_id&gt; &lt;name&gt;</code>\n"
+            "Example: <code>/allow 123456789 Alice</code>",
+        )
+        return
+
+    target_chat_id_str = args[0].strip()
+    name = args[1].strip()
+
+    try:
+        target_chat_id = int(target_chat_id_str)
+    except ValueError:
+        await update.message.reply_text(f"Invalid chat_id: {target_chat_id_str}")
+        return
+
+    # Name becomes a directory under users/, so reject anything that isn't a plain identifier.
+    if not _NAME_RE.fullmatch(name):
+        await update.message.reply_text(
+            f"Invalid name '{name}'. Use only letters, digits, underscore, or hyphen."
+        )
+        return
+
+    async with _allowlist_lock:
+        users = load_allowlist()
+        existing = next((u for u in users if str(u["chat_id"]) == target_chat_id_str), None)
+        if existing:
+            await send_with_fallback(
+                update.message,
+                f"⚠️ chat_id <code>{target_chat_id}</code> is already authorized as "
+                f"<b>{existing['name']}</b>.",
+            )
+            return
+        if any(u["name"].lower() == name.lower() for u in users):
+            await update.message.reply_text(
+                f"⚠️ name '{name}' is already in use. Pick another."
+            )
+            return
+
+        data_dir = f"users/{name}/data"
+        users.append({
+            "name": name,
+            "chat_id": target_chat_id,
+            "owner": False,
+            "data_dir": data_dir,
+        })
+        save_allowlist(users)
+
+    (PROJECT_ROOT / data_dir).mkdir(parents=True, exist_ok=True)
+
+    await send_with_fallback(
+        update.message,
+        f"✅ Added <b>{name}</b> (<code>{target_chat_id}</code>) to the allowlist.\n"
+        f"Data dir: <code>{data_dir}</code>\n\n"
+        f"<i>They can now message the bot and run /start to begin onboarding.</i>",
+    )
+    log.info("Owner added user %s (chat_id=%s)", name, target_chat_id)
+
+
+async def cmd_revoke(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Remove a chat_id from the allowlist. Usage: /revoke <chat_id>"""
+    await record_contact(update, command="revoke")
+    if not is_owner(update):
+        return
+
+    args = context.args or []
+    if not args:
+        await send_with_fallback(
+            update.message,
+            "Usage: <code>/revoke &lt;chat_id&gt;</code>",
+        )
+        return
+
+    target_chat_id_str = args[0].strip()
+
+    async with _allowlist_lock:
+        users = load_allowlist()
+        target = next((u for u in users if str(u["chat_id"]) == target_chat_id_str), None)
+        if target is None:
+            await update.message.reply_text(
+                f"chat_id {target_chat_id_str} is not on the allowlist."
+            )
+            return
+        # Safety rail: never strip the last remaining owner — that would lock
+        # everyone out of admin commands until allowlist.json is hand-edited.
+        if target.get("owner"):
+            remaining_owners = sum(
+                1 for u in users
+                if u.get("owner") and str(u["chat_id"]) != target_chat_id_str
+            )
+            if remaining_owners == 0:
+                await update.message.reply_text(
+                    "❌ Refusing to revoke the last remaining owner. "
+                    "Promote another user to owner in allowlist.json first."
+                )
+                return
+        new_users = [u for u in users if str(u["chat_id"]) != target_chat_id_str]
+        save_allowlist(new_users)
+
+    # If the revoked user has a live Claude session in memory, tear it down so
+    # any in-flight or queued messages from them stop being processed.
+    session = claude_sessions.pop(target_chat_id_str, None)
+    if session is not None:
+        try:
+            await session.stop()
+        except Exception:
+            log.exception("Failed to stop revoked user's Claude session cleanly")
+
+    await send_with_fallback(
+        update.message,
+        f"🚫 Revoked <b>{target['name']}</b> (<code>{target_chat_id_str}</code>). "
+        f"Data dir <code>{target.get('data_dir', '?')}</code> was left in place.",
+    )
+    log.info("Owner revoked user %s (chat_id=%s)", target["name"], target_chat_id_str)
+
+
+async def cmd_restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Restart the bridge. Uses supervisor exit-code-42 if BRIDGE_SUPERVISED=1,
+    otherwise falls back to spawning a detached child and exiting."""
+    await record_contact(update, command="restart")
+    if not is_owner(update):
+        return
+
+    supervised = os.getenv("BRIDGE_SUPERVISED") == "1"
+
+    if supervised:
+        await update.message.reply_text("🔄 Restarting bridge…")
+        log.info("Owner triggered /restart (supervised). Will exit with code %d.", RESTART_EXIT_CODE)
+
+        async def _exit_supervised():
+            # Small delay so the reply has time to leave Telegram before the
+            # process dies. os._exit is intentional — we want a hard exit
+            # that the supervisor can detect via exit code, not a SystemExit
+            # that the asyncio event loop might swallow.
+            await asyncio.sleep(1)
+            os._exit(RESTART_EXIT_CODE)
+
+        asyncio.create_task(_exit_supervised())
+        return
+
+    # Unsupervised fallback: spawn a detached child running the bridge again,
+    # then exit cleanly. Brief race window where both processes call Telegram's
+    # getUpdates and one gets bumped — usually self-resolving but not as clean
+    # as the supervisor path. Recommend switching startup to bridge_supervisor.
+    await send_with_fallback(
+        update.message,
+        "🔄 Restarting bridge (no supervisor detected — using self-relaunch).\n\n"
+        "<i>For cleaner restarts and crash recovery, switch your startup config to "
+        "<code>tools/bridge_supervisor.py</code>.</i>",
+    )
+    log.info("Owner triggered /restart (unsupervised). Spawning detached child.")
+
+    async def _exit_self_relaunch():
+        await asyncio.sleep(1)
+        try:
+            python_exe = sys.executable
+            popen_kwargs: dict = {"close_fds": True}
+            if os.name == "nt":
+                # Prefer pythonw.exe so the relaunched bridge doesn't open a console window
+                pythonw = Path(python_exe).with_name("pythonw.exe")
+                if pythonw.exists():
+                    python_exe = str(pythonw)
+                popen_kwargs["creationflags"] = (
+                    subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+            else:
+                popen_kwargs["start_new_session"] = True
+            subprocess.Popen(
+                [python_exe, str(Path(__file__).resolve())],
+                cwd=str(PROJECT_ROOT),
+                **popen_kwargs,
+            )
+        except Exception:
+            log.exception("Self-relaunch failed; exiting anyway.")
+        os._exit(0)
+
+    asyncio.create_task(_exit_self_relaunch())
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Generic chat handlers (forward to Claude session)
 # ──────────────────────────────────────────────────────────────────────
 async def keep_typing(bot, chat_id: str):
@@ -464,6 +821,8 @@ async def keep_typing(bot, chat_id: str):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message is None or update.effective_chat is None:
         return
+
+    await record_contact(update)
 
     chat_id = str(update.effective_chat.id)
     user = get_user(chat_id)
@@ -507,20 +866,50 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log.info("Sent response (%d chars in %d message(s))", len(response), len(chunks))
 
 
+PUBLIC_COMMANDS = [
+    BotCommand("start", "Begin your coaching journey"),
+    BotCommand("today", "Today's prescribed session"),
+    BotCommand("week", "This week's full plan"),
+    BotCommand("next", "Next scheduled run"),
+    BotCommand("plan", "Open the full plan in Google Sheets"),
+]
+
+ADMIN_COMMANDS = [
+    BotCommand("contacts", "List pending contacts"),
+    BotCommand("allow", "Allow a chat_id: /allow <chat_id> <name>"),
+    BotCommand("revoke", "Revoke a chat_id: /revoke <chat_id>"),
+    BotCommand("restart", "Restart the bridge"),
+]
+
+
 async def post_init(app: Application):
-    """Validate config and register slash commands on startup."""
+    """Validate config and register slash commands on startup.
+
+    Public commands go to the default scope (visible to everyone).
+    Admin commands are layered on top via per-owner BotCommandScopeChat,
+    so each owner sees the full menu in their slash dropdown while
+    non-owners only see the public commands.
+    """
     if not ALLOWLIST_PATH.exists():
         raise FileNotFoundError(f"Allowlist not found: {ALLOWLIST_PATH}")
     users = load_allowlist()
     log.info("Allowlist loaded: %s", [u["name"] for u in users])
-    # Register the slash command menu so they appear in Telegram's UI
-    await app.bot.set_my_commands([
-        BotCommand("start", "Begin your coaching journey"),
-        BotCommand("today", "Today's prescribed session"),
-        BotCommand("week", "This week's full plan"),
-        BotCommand("next", "Next scheduled run"),
-        BotCommand("plan", "Open the full plan in Google Sheets"),
-    ])
+
+    await app.bot.set_my_commands(PUBLIC_COMMANDS)
+
+    owners = [u for u in users if u.get("owner")]
+    for owner in owners:
+        try:
+            await app.bot.set_my_commands(
+                PUBLIC_COMMANDS + ADMIN_COMMANDS,
+                scope=BotCommandScopeChat(chat_id=int(owner["chat_id"])),
+            )
+            log.info("Admin commands scoped to owner %s (%s)", owner["name"], owner["chat_id"])
+        except Exception:
+            log.exception(
+                "Failed to set admin command scope for owner %s", owner.get("name")
+            )
+
     log.info("Bridge ready. Slash commands registered. Sessions start lazily on first message.")
 
 
@@ -548,12 +937,18 @@ def main():
         .post_shutdown(post_shutdown)
         .build()
     )
-    # Slash commands
+    # Slash commands (public — appear in Telegram's slash menu)
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("today", cmd_today))
     app.add_handler(CommandHandler("week", cmd_week))
     app.add_handler(CommandHandler("next", cmd_next))
     app.add_handler(CommandHandler("plan", cmd_plan))
+    # Owner-only admin commands (intentionally not in set_my_commands —
+    # not advertised in the public slash menu, but still work when typed)
+    app.add_handler(CommandHandler("contacts", cmd_contacts))
+    app.add_handler(CommandHandler("allow", cmd_allow))
+    app.add_handler(CommandHandler("revoke", cmd_revoke))
+    app.add_handler(CommandHandler("restart", cmd_restart))
     # Fall-through: anything not a command goes to Claude
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
