@@ -15,12 +15,12 @@ Once, at project start — before `generate_training_plan.md`.
 ```bash
 python tools/garmin_fetch_csv.py --days 90
 ```
-Output: `.tmp/run_history.csv`
+Output: `{data_dir}/run_history.csv`
 
 If the command fails with a 429 (rate limit), wait 60 seconds and retry once. If it fails with an auth error, check `.env` credentials.
 
 ### Step 2 — Read the CSV
-Open `.tmp/run_history.csv` and analyze the following. If there are fewer than 5 runs, note this as a very early baseline.
+Open `{data_dir}/run_history.csv` and analyze the following. If there are fewer than 5 runs, note this as a very early baseline.
 
 **Weekly mileage:**
 - Group runs by ISO week number
@@ -60,7 +60,7 @@ Based on the data, determine:
 | Estimated race pace | Based on pace trend; will refine as training progresses |
 
 ### Step 4 — Save baseline to file
-Write the following JSON to `.tmp/fitness_baseline.json`:
+Write the following JSON to `{data_dir}/fitness_baseline.json`:
 
 ```json
 {
@@ -102,6 +102,8 @@ Wait for Kevin's confirmation or adjustments before proceeding to `generate_trai
 - **Garmin rate limit (429):** Wait 60 seconds, retry. Document in this workflow if it becomes a recurring issue.
 
 ## Output
-- `.tmp/run_history.csv` — full 90-day activity history
-- `.tmp/fitness_baseline.json` — structured baseline used by plan generation
+- `{data_dir}/run_history.csv` — full 90-day activity history
+- `{data_dir}/fitness_baseline.json` — structured baseline used by plan generation
+
+> `{data_dir}` is the user's data directory from their `allowlist.json` entry — `users/<Name>/data/` for everyone (including the owner since the multi-user pivot).
 - Plain-text assessment presented to Kevin

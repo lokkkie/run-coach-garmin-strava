@@ -10,10 +10,12 @@ Pull the latest Garmin run, compare it to the prescribed session, identify perfo
 - `GOOGLE_SHEETS_SPREADSHEET_ID` in `.env`
 - A completed run synced to the active source (Garmin Connect or Strava)
 
-> **Source note:** `polling_check.py` and the pre-check steps below default to the Garmin path. If `data_source` is `"strava"`, use `strava_latest_id.py` / `strava_pull.py` in place of `garmin_latest_id.py` / `garmin_fetch_fit.py` + `analyze_fit.py`. All subsequent steps are source-agnostic (both paths produce the same `.tmp/run_analysis.json` schema).
+> **Source note:** `polling_check.py` and the pre-check steps below default to the Garmin path. If `data_source` is `"strava"`, use `strava_latest_id.py` / `strava_pull.py` in place of `garmin_latest_id.py` / `garmin_fetch_fit.py` + `analyze_fit.py`. All subsequent steps are source-agnostic (both paths produce the same `{data_dir}/run_analysis.json` schema).
 
 ## Tool Conventions
 All tool calls in this workflow use `--quiet` by default — they emit a single-line `OK ...` summary plus error info. Drop `--quiet` only when manually debugging.
+
+> **Path convention:** `{data_dir}` is the user's data directory (look up `data_dir` in `users/allowlist.json` for the active user; e.g. `users/Kevin/data/` for the owner). Substitute it before running commands.
 
 ---
 
@@ -25,12 +27,12 @@ python tools/garmin_latest_id.py
 ```
 Output (3 lines): `<activity_id>` / `<YYYY-MM-DD>` / `<activity_name>`. Exit 2 = rate-limited (back off, abort).
 
-Then check `.tmp/run_log.json`:
+Then check `{data_dir}/run_log.json`:
 ```bash
-python -c "import json,sys; aid=sys.argv[1]; d=json.load(open('.tmp/run_log.json')); print('HIT' if any(str(e.get('activity_id',''))==aid for e in d) else 'MISS')" <ACTIVITY_ID>
+python -c "import json,sys; aid=sys.argv[1]; d=json.load(open('{data_dir}/run_log.json')); print('HIT' if any(str(e.get('activity_id',''))==aid for e in d) else 'MISS')" <ACTIVITY_ID>
 ```
 
-- **HIT** → activity already analyzed. Skip Steps 1 and 2. Read `.tmp/run_analysis.json` directly (it holds the most recent full analysis). Proceed to Step 3.
+- **HIT** → activity already analyzed. Skip Steps 1 and 2. Read `{data_dir}/run_analysis.json` directly (it holds the most recent full analysis). Proceed to Step 3.
 - **MISS** → new run. Proceed to Step 1.
 
 ---
@@ -45,7 +47,7 @@ Output: `OK <activity_id> <path>`. Failures: 429 → wait 60s and retry once; au
 ```bash
 python tools/analyze_fit.py --quiet
 ```
-Output: `OK .tmp/run_analysis.json`. Read that JSON to get the session summary, patterns, and lap splits.
+Output: `OK {data_dir}/run_analysis.json`. Read that JSON to get the session summary, patterns, and lap splits.
 
 ## Step 3 — Compare vs prescribed
 Read `coaching_state.json` for the active `plan_sheet_tab`. Then fetch only today's session:
@@ -59,7 +61,7 @@ Returns one row of JSON. Compare actual vs planned distance, pace, HR zone, dura
 From `run_analysis.json` patterns + lap splits, assess: cardiac decoupling, pacing discipline, negative split, fatigue signals, cadence. **Threshold definitions and tier interpretations live in `workflows/references/post_run_protocols.md` — read that file only when you need the specific cutoffs; otherwise apply standard running-coaching judgment.**
 
 ## Step 5 — Benchmark against history
-Read `.tmp/run_log.json`. Check for PRs (longest, fastest at this distance, best decoupling). Compare avg pace and HR trend over the last 4 weeks. Praise PRs and surface trajectory.
+Read `{data_dir}/run_log.json`. Check for PRs (longest, fastest at this distance, best decoupling). Compare avg pace and HR trend over the last 4 weeks. Praise PRs and surface trajectory.
 
 ## Step 6 — Prescribe next session
 Generate a recommendation for Kevin.

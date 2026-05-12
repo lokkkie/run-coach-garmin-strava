@@ -4,7 +4,7 @@
       "name": "Kevin",
       "chat_id": 657664020,
       "owner": true,
-      "data_dir": ".tmp"
+      "data_dir": "users/Kevin/data"
     },
     {
       "name": "Nicolas",

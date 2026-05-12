@@ -1,21 +1,26 @@
 """
 Hourly polling check — detects new activities and prepares them for analysis.
-Designed to run from Windows Task Scheduler. Exits silently when there's no new activity.
+Designed to run from Windows Task Scheduler. Exits silently when there's no new
+activity for any user.
 
-Reads coaching_state.json:data_source to pick Garmin (default) or Strava.
-Override with --source garmin|strava for testing.
+Per user, reads {data_dir}/coaching_state.json:data_source to pick Garmin
+(default) or Strava. Override with --source garmin|strava for testing.
 
 Garmin flow:
-  1. Login to Garmin Connect, fetch latest activity
-  2. If new run: download .FIT, run analyze_fit.py
-  3. Write pending_analysis.json + send Telegram notification
+  1. Login to Garmin Connect (per-user credentials, or env fallback for owner),
+     fetch latest activity.
+  2. If new run: download .FIT to {data_dir}, run analyze_fit.py.
+  3. Write {data_dir}/pending_analysis.json + send Telegram notification.
 
 Strava flow:
-  1. Call strava_latest_id.py to get latest run ID
-  2. If new run: call strava_pull.py to fetch + analyse
-  3. Write pending_analysis.json + send Telegram notification
+  1. Call strava_latest_id.py --user <name> to get latest run ID.
+  2. If new run: call strava_pull.py --user <name> to fetch + analyse.
+  3. Write {data_dir}/pending_analysis.json + send Telegram notification.
 
-Usage: python tools/polling_check.py [--quiet] [--source garmin|strava]
+Usage:
+  python tools/polling_check.py                         # all users in allowlist
+  python tools/polling_check.py --user Kevin            # one user
+  python tools/polling_check.py --user Kevin --source strava
 """
 
 import argparse
@@ -33,6 +38,11 @@ from dotenv import load_dotenv
 
 QUIET = False
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
+
+ALLOWLIST_PATH = PROJECT_ROOT / "users" / "allowlist.json"
+
 
 def extract_fit_bytes(raw: bytes) -> bytes:
     """Garmin's ORIGINAL download format returns a ZIP containing the .FIT.
@@ -48,16 +58,6 @@ def extract_fit_bytes(raw: bytes) -> bytes:
     return raw
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
-
-TMP_DIR = PROJECT_ROOT / ".tmp"
-LAST_ANALYZED_FILE = TMP_DIR / "last_analyzed_id.txt"   # legacy pointer; kept for backward compat
-PENDING_FILE = TMP_DIR / "pending_analysis.json"
-RUN_LOG_FILE = TMP_DIR / "run_log.json"
-STATE_FILE = TMP_DIR / "coaching_state.json"
-
-
 def log(msg: str):
     """Log with timestamp — useful when running under Task Scheduler."""
     if QUIET:
@@ -65,59 +65,69 @@ def log(msg: str):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
 
 
-def activity_in_run_log(activity_id: str) -> bool:
+def load_allowlist() -> list[dict]:
+    with open(ALLOWLIST_PATH, encoding="utf-8") as f:
+        return json.load(f)["users"]
+
+
+def data_dir_for(user: dict) -> Path:
+    return PROJECT_ROOT / user["data_dir"]
+
+
+def activity_in_run_log(data_dir: Path, activity_id: str) -> bool:
     """Source of truth for 'has this run been analyzed?' — reads run_log.json."""
-    if not RUN_LOG_FILE.exists():
+    run_log = data_dir / "run_log.json"
+    if not run_log.exists():
         return False
     try:
-        with open(RUN_LOG_FILE, encoding="utf-8") as f:
+        with open(run_log, encoding="utf-8") as f:
             entries = json.load(f)
     except (json.JSONDecodeError, OSError):
         return False
     return any(str(e.get("activity_id", "")) == str(activity_id) for e in entries)
 
 
-def set_last_analyzed_id(activity_id: str):
+def set_last_analyzed_id(data_dir: Path, activity_id: str):
     """Convenience pointer; run_log.json is the canonical source."""
-    TMP_DIR.mkdir(exist_ok=True)
-    LAST_ANALYZED_FILE.write_text(activity_id, encoding="utf-8")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "last_analyzed_id.txt").write_text(activity_id, encoding="utf-8")
 
 
-def send_telegram(message: str):
+def send_telegram(message: str, chat_id: str | int | None):
     """Best-effort Telegram notification. Silent failure if not configured."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    if not token or not chat_id:
+    if not token or chat_id is None:
         return
     try:
         import requests
         requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"},
+            json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"},
             timeout=10,
         )
     except Exception as e:
         log(f"Telegram notification failed: {e}")
 
 
-def _get_data_source() -> str:
-    """Read data_source from coaching_state.json. Defaults to 'garmin'."""
-    if not STATE_FILE.exists():
+def get_data_source(data_dir: Path) -> str:
+    """Read data_source from {data_dir}/coaching_state.json. Defaults to 'garmin'."""
+    state_file = data_dir / "coaching_state.json"
+    if not state_file.exists():
         return "garmin"
     try:
-        with open(STATE_FILE, encoding="utf-8") as f:
+        with open(state_file, encoding="utf-8") as f:
             state = json.load(f)
         return state.get("data_source", "garmin")
     except (json.JSONDecodeError, OSError):
         return "garmin"
 
 
-def _post_ingest(activity_id: str, date_str: str):
+def _post_ingest(user: dict, data_dir: Path, activity_id: str, date_str: str):
     """Common post-ingest logic shared by both Garmin and Strava paths.
     Reads run_analysis.json, writes pending_analysis.json, notifies via Telegram."""
-    analysis_file = TMP_DIR / "run_analysis.json"
+    analysis_file = data_dir / "run_analysis.json"
     if not analysis_file.exists():
-        log("WARN: run_analysis.json not produced.")
+        log(f"[{user['name']}] WARN: run_analysis.json not produced.")
         return
     with open(analysis_file, encoding="utf-8") as f:
         analysis = json.load(f)
@@ -136,72 +146,73 @@ def _post_ingest(activity_id: str, date_str: str):
         },
         "analysis_complete": False,
     }
-    PENDING_FILE.write_text(json.dumps(pending, indent=2), encoding="utf-8")
-    log(f"Wrote {PENDING_FILE}")
+    pending_file = data_dir / "pending_analysis.json"
+    pending_file.write_text(json.dumps(pending, indent=2), encoding="utf-8")
+    log(f"[{user['name']}] Wrote {pending_file}")
 
     s = analysis["session"]
     source_label = analysis.get("source", "garmin").capitalize()
     notif = (
-        f"🏃 *New run detected* ({source_label})\n"
+        f"🏃 <b>New run detected</b> ({source_label})\n"
         f"📅 {date_str}\n"
         f"📏 {s['distance_km']} km in {s['duration_min']} min\n"
         f"⚡ Avg pace: {s['avg_pace']}/km\n"
         f"❤️ Avg HR: {s['avg_hr']}  |  Max HR: {s['max_hr']}\n\n"
-        f"Reply *analyze* for full coaching debrief."
+        f"Reply <i>analyze</i> for full coaching debrief."
     )
-    send_telegram(notif)
-    log("Telegram notification sent.")
-    set_last_analyzed_id(activity_id)
-    log("Done.")
+    send_telegram(notif, user.get("chat_id"))
+    log(f"[{user['name']}] Telegram notification sent.")
+    set_last_analyzed_id(data_dir, activity_id)
 
 
-def _run_garmin():
+def _run_garmin(user: dict, data_dir: Path):
     """Garmin polling path — login, fetch latest activity, download .FIT, analyse."""
-    from garminconnect import Garmin
+    # Import lazily so users without garminconnect installed can still run the
+    # Strava-only path.
+    sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+    from garmin_auth import get_garmin_client  # noqa: E402
 
-    email = os.getenv("GARMIN_EMAIL")
-    password = os.getenv("GARMIN_PASSWORD")
-    if not email or not password:
-        print("ERROR: GARMIN_EMAIL / GARMIN_PASSWORD missing in .env", file=sys.stderr)
-        sys.exit(1)
-
-    log("Starting Garmin polling check...")
+    name = user["name"]
+    log(f"[{name}] Starting Garmin polling check...")
 
     try:
-        client = Garmin(email, password)
-        client.login()
+        client = get_garmin_client(name)
+    except SystemExit:
+        # garmin_auth already logged the error; skip this user, don't kill the loop.
+        log(f"[{name}] Garmin credentials unavailable; skipping.")
+        return
     except Exception as e:
         msg = str(e)
         if "429" in msg or "rate limit" in msg.lower():
-            log("Rate limited by Garmin (429). Will retry next hour.")
-            sys.exit(0)
-        log(f"Garmin login failed: {e}")
-        sys.exit(2)
+            log(f"[{name}] Rate limited by Garmin (429). Will retry next hour.")
+            return
+        log(f"[{name}] Garmin login failed: {e}")
+        return
 
     try:
         activities = client.get_activities(0, 1)
     except Exception as e:
-        log(f"Failed to fetch activities: {e}")
-        sys.exit(2)
+        log(f"[{name}] Failed to fetch activities: {e}")
+        return
 
     if not activities:
-        log("No activities found.")
+        log(f"[{name}] No activities found.")
         return
 
     latest = activities[0]
     if latest.get("activityType", {}).get("typeKey", "") != "running":
-        log(f"Latest activity is not a run ({latest.get('activityName', '')}). Skipping.")
+        log(f"[{name}] Latest activity is not a run ({latest.get('activityName', '')}). Skipping.")
         return
 
     activity_id = str(latest["activityId"])
     date_str = latest.get("startTimeLocal", "")[:10] or "unknown"
 
-    if activity_in_run_log(activity_id):
-        log(f"Latest run ({activity_id}, {date_str}) already in run_log.json. Nothing to do.")
-        set_last_analyzed_id(activity_id)
+    if activity_in_run_log(data_dir, activity_id):
+        log(f"[{name}] Latest run ({activity_id}, {date_str}) already in run_log.json. Nothing to do.")
+        set_last_analyzed_id(data_dir, activity_id)
         return
 
-    log(f"NEW run detected: activity_id={activity_id}, date={date_str}")
+    log(f"[{name}] NEW run detected: activity_id={activity_id}, date={date_str}")
 
     try:
         raw = client.download_activity(
@@ -209,82 +220,104 @@ def _run_garmin():
         )
         fit_data = extract_fit_bytes(raw)
     except Exception as e:
-        log(f"FIT download failed: {e}")
-        sys.exit(2)
+        log(f"[{name}] FIT download failed: {e}")
+        return
 
-    fit_path = TMP_DIR / f"run_{date_str}.fit"
-    TMP_DIR.mkdir(exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    fit_path = data_dir / f"run_{date_str}.fit"
     fit_path.write_bytes(fit_data)
 
-    (TMP_DIR / "last_activity_id.txt").write_text(
+    (data_dir / "last_activity_id.txt").write_text(
         f"{activity_id}\n{date_str}\n{fit_path}\n", encoding="utf-8"
     )
-    log(f"Saved {len(fit_data):,} bytes to {fit_path}")
+    log(f"[{name}] Saved {len(fit_data):,} bytes to {fit_path}")
 
-    log("Running analyze_fit...")
+    log(f"[{name}] Running analyze_fit...")
     result = subprocess.run(
         [sys.executable, str(PROJECT_ROOT / "tools" / "analyze_fit.py"),
-         "--file", str(fit_path), "--activity-id", activity_id, "--quiet"],
+         "--file", str(fit_path), "--activity-id", activity_id,
+         "--user", name, "--quiet"],
         capture_output=True, text=True, cwd=str(PROJECT_ROOT),
     )
     if result.returncode != 0:
-        log(f"analyze_fit failed: {result.stderr}")
-        sys.exit(2)
-    log(result.stdout.strip())
+        log(f"[{name}] analyze_fit failed: {result.stderr}")
+        return
+    log(f"[{name}] {result.stdout.strip()}")
 
-    _post_ingest(activity_id, date_str)
+    _post_ingest(user, data_dir, activity_id, date_str)
 
 
-def _run_strava():
+def _run_strava(user: dict, data_dir: Path):
     """Strava polling path — call strava_latest_id, dedup, call strava_pull if new."""
-    log("Starting Strava polling check...")
+    name = user["name"]
+    log(f"[{name}] Starting Strava polling check...")
 
     id_result = subprocess.run(
-        [sys.executable, str(PROJECT_ROOT / "tools" / "strava_latest_id.py")],
+        [sys.executable, str(PROJECT_ROOT / "tools" / "strava_latest_id.py"),
+         "--user", name],
         capture_output=True, text=True, cwd=str(PROJECT_ROOT),
     )
     if id_result.returncode == 2:
-        log("Rate limited by Strava (429). Will retry next hour.")
-        sys.exit(0)
+        log(f"[{name}] Rate limited by Strava (429). Will retry next hour.")
+        return
     if id_result.returncode != 0:
-        log(f"strava_latest_id failed: {id_result.stderr.strip()}")
-        sys.exit(2)
+        log(f"[{name}] strava_latest_id failed: {id_result.stderr.strip()}")
+        return
 
     lines = id_result.stdout.strip().splitlines()
     if not lines:
-        log("strava_latest_id returned no output.")
+        log(f"[{name}] strava_latest_id returned no output.")
         return
 
     activity_id = lines[0].strip()
     date_str = lines[1].strip() if len(lines) > 1 else "unknown"
-    name = lines[2].strip() if len(lines) > 2 else ""
-    log(f"Latest Strava run: {activity_id} ({date_str}) — {name}")
+    activity_name = lines[2].strip() if len(lines) > 2 else ""
+    log(f"[{name}] Latest Strava run: {activity_id} ({date_str}) — {activity_name}")
 
-    if activity_in_run_log(activity_id):
-        log(f"Latest run ({activity_id}, {date_str}) already in run_log.json. Nothing to do.")
-        set_last_analyzed_id(activity_id)
+    if activity_in_run_log(data_dir, activity_id):
+        log(f"[{name}] Latest run ({activity_id}, {date_str}) already in run_log.json. Nothing to do.")
+        set_last_analyzed_id(data_dir, activity_id)
         return
 
-    log(f"NEW run detected: activity_id={activity_id}, date={date_str}")
+    log(f"[{name}] NEW run detected: activity_id={activity_id}, date={date_str}")
 
     pull_result = subprocess.run(
         [sys.executable, str(PROJECT_ROOT / "tools" / "strava_pull.py"),
-         "--activity-id", activity_id, "--quiet"],
+         "--activity-id", activity_id, "--user", name, "--quiet"],
         capture_output=True, text=True, cwd=str(PROJECT_ROOT),
     )
     if pull_result.returncode != 0:
-        log(f"strava_pull failed: {pull_result.stderr.strip()}")
-        sys.exit(2)
-    log(pull_result.stdout.strip())
+        log(f"[{name}] strava_pull failed: {pull_result.stderr.strip()}")
+        return
+    log(f"[{name}] {pull_result.stdout.strip()}")
 
-    _post_ingest(activity_id, date_str)
+    _post_ingest(user, data_dir, activity_id, date_str)
+
+
+def poll_user(user: dict, source_override: str | None):
+    """Poll a single user. Errors are logged but don't propagate — one user's
+    bad credentials or rate limit shouldn't abort the rest of the loop."""
+    data_dir = data_dir_for(user)
+    source = source_override or get_data_source(data_dir)
+    log(f"[{user['name']}] data_source: {source}")
+
+    if source == "strava":
+        _run_strava(user, data_dir)
+    elif source == "garmin":
+        _run_garmin(user, data_dir)
+    elif source == "manual":
+        log(f"[{user['name']}] data_source=manual — skipping (user is on manual logging).")
+    else:
+        log(f"[{user['name']}] unknown data_source: {source!r} — skipping.")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Hourly polling check (Garmin or Strava)")
     parser.add_argument("--quiet", action="store_true", help="Suppress non-error stdout")
     parser.add_argument("--source", choices=["garmin", "strava"], default=None,
-                        help="Override data source (default: read from coaching_state.json)")
+                        help="Override data source (default: read from each user's coaching_state.json)")
+    parser.add_argument("--user", default=None,
+                        help="Poll only this user (default: iterate every user in allowlist)")
     args = parser.parse_args()
 
     global QUIET
@@ -293,13 +326,22 @@ def main():
         for name in ("garminconnect", "garth", "urllib3"):
             logging.getLogger(name).setLevel(logging.ERROR)
 
-    source = args.source or _get_data_source()
-    log(f"Data source: {source}")
-
-    if source == "strava":
-        _run_strava()
+    allowlist = load_allowlist()
+    if args.user:
+        users = [u for u in allowlist if u["name"] == args.user]
+        if not users:
+            print(f"ERROR: user '{args.user}' not in allowlist", file=sys.stderr)
+            sys.exit(1)
     else:
-        _run_garmin()
+        users = allowlist
+
+    for user in users:
+        try:
+            poll_user(user, args.source)
+        except Exception as e:
+            log(f"[{user.get('name', '?')}] polling failed: {e}")
+            # next user
+    log("Done.")
 
 
 if __name__ == "__main__":

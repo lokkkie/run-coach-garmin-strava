@@ -2,7 +2,9 @@
 Cheap helper: print the latest Strava run's activity_id and date.
 Mirrors tools/garmin_latest_id.py for symmetry.
 
-Usage: python tools/strava_latest_id.py
+Usage:
+  python tools/strava_latest_id.py
+  python tools/strava_latest_id.py --user Nicolas
 Output (3 lines, stdout):
   <activity_id>
   <YYYY-MM-DD>
@@ -14,6 +16,7 @@ Exit codes:
   2  rate-limited (429); caller should back off
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -26,8 +29,12 @@ API_URL = "https://www.strava.com/api/v3/athlete/activities"
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Print latest Strava run id/date/name")
+    parser.add_argument("--user", default=None, help="User name for per-user Strava token")
+    args = parser.parse_args()
+
     try:
-        token = get_access_token()
+        token = get_access_token(user=args.user)
     except RuntimeError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)

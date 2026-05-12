@@ -3,6 +3,22 @@ credentials.json
 token.json
 .tmp/
 users/contact_log.json
+# Per-user secrets (credentials, OAuth tokens). Allowlist + plan files are
+# fine to commit; these are not.
+users/*/data/garmin_credentials.json
+users/*/data/strava_token.json
+# Per-user transient state (regenerated on next poll/sync) and biometric history.
+# coaching_state.json, fitness_baseline.json, plan.json are intentionally tracked
+# (small, useful context, low PII) — everything below is local-only.
+users/*/data/run_log.json
+users/*/data/run_history.csv
+users/*/data/run_analysis.json
+users/*/data/pending_analysis.json
+users/*/data/last_activity_id.txt
+users/*/data/last_analyzed_id.txt
+users/*/data/sleep_log.json
+users/*/data/personal_records.json
+users/*/data/run_*.fit
 __pycache__/
 *.pyc
 *.pyo

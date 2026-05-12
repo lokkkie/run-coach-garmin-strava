@@ -35,27 +35,34 @@ def _credentials_file(user: str) -> Path:
 def get_garmin_credentials(user: str | None) -> tuple[str, str]:
     """Return (email, password) for the given user.
 
-    Falls back to GARMIN_EMAIL / GARMIN_PASSWORD env vars when user is None (Kevin's flow).
+    Lookup order:
+      1. Per-user file at {data_dir}/garmin_credentials.json (preferred for
+         multi-user setups; written by `garmin_auth.py --save --user ...`).
+      2. GARMIN_EMAIL / GARMIN_PASSWORD env vars (the owner's legacy single-user
+         path; remains the simplest way to run the bot for one person).
     """
     if user:
         cred_file = _credentials_file(user)
-        if not cred_file.exists():
-            print(
-                f"ERROR: No Garmin credentials for {user}. "
-                f"Run: python tools/garmin_auth.py --save --user {user} --email <email> --password <password>",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        with open(cred_file, encoding="utf-8") as f:
-            creds = json.load(f)
-        return creds["email"], creds["password"]
+        if cred_file.exists():
+            with open(cred_file, encoding="utf-8") as f:
+                creds = json.load(f)
+            return creds["email"], creds["password"]
 
     email = os.getenv("GARMIN_EMAIL")
     password = os.getenv("GARMIN_PASSWORD")
-    if not email or not password:
+    if email and password:
+        return email, password
+
+    if user:
+        print(
+            f"ERROR: No Garmin credentials for {user}. "
+            f"Either set GARMIN_EMAIL/GARMIN_PASSWORD in .env or run:\n"
+            f"  python tools/garmin_auth.py --save --user {user} --email <email> --password <password>",
+            file=sys.stderr,
+        )
+    else:
         print("ERROR: GARMIN_EMAIL and GARMIN_PASSWORD must be set in .env", file=sys.stderr)
-        sys.exit(1)
-    return email, password
+    sys.exit(1)
 
 
 def get_garmin_client(user: str | None) -> Garmin:

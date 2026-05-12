@@ -84,7 +84,9 @@ You should get a message in Telegram. If not, double-check the token + chat ID.
 Click OK → enter your Windows password if prompted.
 
 ### Verify
-Right-click the task → **Run**. Check `.tmp/polling_check.log` (or look at last_analyzed_id.txt updating). Then it'll run hourly automatically.
+Right-click the task → **Run**. Look at History tab for the task in Task Scheduler, or check `users/<Name>/data/last_analyzed_id.txt` updating after a new run. Then it'll run hourly automatically.
+
+> **Multi-user note:** With no arguments, `polling_check.py` iterates every user in `users/allowlist.json` and polls each. To poll just one user, add `--user <Name>` to the task's arguments (e.g. `tools\polling_check.py --user Kevin`). Each user's data lives in `users/<Name>/data/` — Garmin credentials in `garmin_credentials.json` (or `GARMIN_EMAIL`/`GARMIN_PASSWORD` in `.env` as a legacy fallback for the owner), Strava tokens in `strava_token.json`. Telegram notifications go to that user's `chat_id` from the allowlist, not the global `TELEGRAM_CHAT_ID`.
 
 ---
 

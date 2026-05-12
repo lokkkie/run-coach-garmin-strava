@@ -1,0 +1,62 @@
+{
+  "plan_metadata": {
+    "race_name": "23rd Fruit Kingdom Higashine Sakuranbo Marathon",
+    "race_distance_km": 21.0975,
+    "race_date": "2026-06-07",
+    "target_time": "1:47:00",
+    "target_pace_per_km": "5:07",
+    "vdot": 38,
+    "methodology_choices": [
+      { "weeks": "1-2", "method": "daniels", "phase": "build" },
+      { "weeks": "3", "method": "daniels", "phase": "peak" },
+      { "weeks": "4-5", "method": "daniels", "phase": "taper" }
+    ],
+    "generated_date": "2026-05-01",
+    "baseline_used": ".tmp/fitness_baseline.json",
+    "intermediate_race_handling": "May 10 HM treated as tune-up: 3-day cutback before, controlled effort (5:25/km, HR<=170), 3-day recovery after"
+  },
+  "sessions": [
+    { "week": 1, "date": "2026-05-01", "day": "Fri", "session_type": "Easy", "distance_km": 8, "pace_target": "6:45", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "First day of plan" },
+    { "week": 1, "date": "2026-05-02", "day": "Sat", "session_type": "Tempo", "distance_km": 12, "pace_target": "5:00", "hr_zone": "Z3-Z4", "description": "T workout: 4 x 1.5km @ T, 60s jog recovery, plus 3km wu/cd", "notes": "Cruise intervals" },
+    { "week": 1, "date": "2026-05-03", "day": "Sun", "session_type": "Easy", "distance_km": 6.5, "pace_target": "6:45-7:00", "hr_zone": "Z1-Z2", "description": "Shortened easy run (~45 min) - swapped from planned 14km long run due to time constraint", "notes": "Long run not made up - May 10 HM tune-up (21.1km @ 5:25) serves as long run for this block" },
+    { "week": 1, "date": "2026-05-04", "day": "Mon", "session_type": "Intervals", "distance_km": 11.18, "pace_target": "4:40", "hr_zone": "Z4-Z5", "description": "I workout: 5 x 1km @ I, 2 min jog recovery, plus 3km wu/cd", "notes": "DONE - actual 5x1km avg 4:35 (target 4:40), pacing discipline 0.3%, max HR 189. Swapped from Tue." },
+    { "week": 1, "date": "2026-05-05", "day": "Tue", "session_type": "Rest", "distance_km": 0, "pace_target": "", "hr_zone": "", "description": "Rest day", "notes": "Swapped from Mon" },
+    { "week": 1, "date": "2026-05-06", "day": "Wed", "session_type": "Easy", "distance_km": 7, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "" },
+    { "week": 1, "date": "2026-05-07", "day": "Thu", "session_type": "Easy", "distance_km": 5, "pace_target": "6:45", "hr_zone": "Z1-Z2", "description": "Easy + 4 x 100m strides @ R pace", "notes": "Strides at end" },
+    { "week": 1, "date": "2026-05-08", "day": "Fri", "session_type": "Rest", "distance_km": 0, "pace_target": "", "hr_zone": "", "description": "Rest day - cutback for May 10", "notes": "Mini-taper begins" },
+    { "week": 1, "date": "2026-05-09", "day": "Sat", "session_type": "Strides", "distance_km": 4, "pace_target": "7:15", "hr_zone": "Z1", "description": "Shakeout + 4 x 100m strides", "notes": "Pre-race shakeout" },
+    { "week": 1, "date": "2026-05-10", "day": "Sun", "session_type": "Race", "distance_km": 21.1, "pace_target": "5:25", "hr_zone": "Z3 (HR cap 170)", "description": "HM TUNE-UP - Controlled effort, NOT a race", "notes": "Cap HR at 170. Goal: practice race distance, not race the field. If feeling great at km 15, can push to 5:15 final 6km only." },
+
+    { "week": 2, "date": "2026-05-11", "day": "Mon", "session_type": "Rest", "distance_km": 0, "pace_target": "", "hr_zone": "", "description": "Rest", "notes": "Post-race recovery day 1" },
+    { "week": 2, "date": "2026-05-12", "day": "Tue", "session_type": "Recovery", "distance_km": 5, "pace_target": "7:30", "hr_zone": "Z1", "description": "Easy recovery jog", "notes": "HR < 145" },
+    { "week": 2, "date": "2026-05-13", "day": "Wed", "session_type": "Easy", "distance_km": 7, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "" },
+    { "week": 2, "date": "2026-05-14", "day": "Thu", "session_type": "Tempo", "distance_km": 12, "pace_target": "5:00", "hr_zone": "Z3-Z4", "description": "T workout: 4 x 2km @ T, 90s jog recovery, plus 4km wu/cd", "notes": "Return to quality" },
+    { "week": 2, "date": "2026-05-15", "day": "Fri", "session_type": "Easy", "distance_km": 6, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "Added — volume push for 1:47 target" },
+    { "week": 2, "date": "2026-05-16", "day": "Sat", "session_type": "Easy", "distance_km": 8, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "Bumped from 6km" },
+    { "week": 2, "date": "2026-05-17", "day": "Sun", "session_type": "Long", "distance_km": 18, "pace_target": "6:30", "hr_zone": "Z2", "description": "Long run", "notes": "Bumped from 16km" },
+
+    { "week": 3, "date": "2026-05-18", "day": "Mon", "session_type": "Rest", "distance_km": 0, "pace_target": "", "hr_zone": "", "description": "Rest", "notes": "" },
+    { "week": 3, "date": "2026-05-19", "day": "Tue", "session_type": "Race-Pace", "distance_km": 16, "pace_target": "5:07", "hr_zone": "Z3-Z4", "description": "Race-pace block: 4 x 3km @ M, 2 min jog recovery, plus 4km wu/cd", "notes": "KEY SESSION - 1:47 target pace" },
+    { "week": 3, "date": "2026-05-20", "day": "Wed", "session_type": "Easy", "distance_km": 7, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "" },
+    { "week": 3, "date": "2026-05-21", "day": "Thu", "session_type": "Tempo", "distance_km": 10, "pace_target": "5:00", "hr_zone": "Z4", "description": "T workout: 6km continuous @ T, plus 4km wu/cd", "notes": "Lift LT above race pace" },
+    { "week": 3, "date": "2026-05-22", "day": "Fri", "session_type": "Easy", "distance_km": 5, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "Added — volume push for 1:47 target" },
+    { "week": 3, "date": "2026-05-23", "day": "Sat", "session_type": "Easy", "distance_km": 6, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "" },
+    { "week": 3, "date": "2026-05-24", "day": "Sun", "session_type": "Long", "distance_km": 20, "pace_target": "6:15 + 5:07", "hr_zone": "Z2 + Z3-Z4", "description": "Last long run: 15km @ E pace, then 5km @ M (5:07)", "notes": "Bumped to 20km. Extended M-pace finish. Make race finish pace feel familiar." },
+
+    { "week": 4, "date": "2026-05-25", "day": "Mon", "session_type": "Rest", "distance_km": 0, "pace_target": "", "hr_zone": "", "description": "Rest", "notes": "Taper begins" },
+    { "week": 4, "date": "2026-05-26", "day": "Tue", "session_type": "Tempo", "distance_km": 6, "pace_target": "5:00", "hr_zone": "Z4", "description": "Tempo: 4km @ T, plus 2km wu/cd", "notes": "Sharp but short" },
+    { "week": 4, "date": "2026-05-27", "day": "Wed", "session_type": "Easy", "distance_km": 8, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "" },
+    { "week": 4, "date": "2026-05-28", "day": "Thu", "session_type": "Intervals", "distance_km": 8, "pace_target": "4:40", "hr_zone": "Z4-Z5", "description": "Intervals: 4 x 1km @ I, 2 min jog recovery, plus 2km wu/cd", "notes": "Last interval session" },
+    { "week": 4, "date": "2026-05-29", "day": "Fri", "session_type": "Rest", "distance_km": 0, "pace_target": "", "hr_zone": "", "description": "Rest", "notes": "" },
+    { "week": 4, "date": "2026-05-30", "day": "Sat", "session_type": "Easy", "distance_km": 6, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "" },
+    { "week": 4, "date": "2026-05-31", "day": "Sun", "session_type": "Long", "distance_km": 14, "pace_target": "6:30", "hr_zone": "Z2", "description": "Reduced long run (down from 20 peak)", "notes": "" },
+
+    { "week": 5, "date": "2026-06-01", "day": "Mon", "session_type": "Rest", "distance_km": 0, "pace_target": "", "hr_zone": "", "description": "Rest", "notes": "Race week" },
+    { "week": 5, "date": "2026-06-02", "day": "Tue", "session_type": "Race-Pace", "distance_km": 5, "pace_target": "5:07", "hr_zone": "Z3", "description": "Race-pace primer: 3km @ M, plus 2km wu/cd", "notes": "Last quality session" },
+    { "week": 5, "date": "2026-06-03", "day": "Wed", "session_type": "Easy", "distance_km": 5, "pace_target": "7:00", "hr_zone": "Z1-Z2", "description": "Easy aerobic", "notes": "" },
+    { "week": 5, "date": "2026-06-04", "day": "Thu", "session_type": "Strides", "distance_km": 5, "pace_target": "7:00 + R", "hr_zone": "Z1 + Z5", "description": "Easy 4km + 6 x 100m strides", "notes": "Keep legs sharp" },
+    { "week": 5, "date": "2026-06-05", "day": "Fri", "session_type": "Rest", "distance_km": 0, "pace_target": "", "hr_zone": "", "description": "Rest", "notes": "" },
+    { "week": 5, "date": "2026-06-06", "day": "Sat", "session_type": "Strides", "distance_km": 3, "pace_target": "7:30 + R", "hr_zone": "Z1 + Z5", "description": "Day before: 20 min easy + 4 x 100m strides", "notes": "Calms nerves better than rest" },
+    { "week": 5, "date": "2026-06-07", "day": "Sun", "session_type": "Race", "distance_km": 21.1, "pace_target": "5:07", "hr_zone": "Z3-Z4", "description": "RACE A - sub-1:47", "notes": "Pacing: km 0-5 @ 5:12, km 5-15 @ 5:05-5:07, km 15-21.1 @ 5:02-5:05. Cooler weather is your friend. Carb breakfast 2.5-3h before. Optional gel at km 12." }
+  ]
+}

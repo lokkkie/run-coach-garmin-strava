@@ -32,10 +32,10 @@ python tools/garmin_latest_id.py
 Output: `<activity_id>` / `<YYYY-MM-DD>` / `<activity_name>`. Exit 2 = rate-limited (back off, abort).
 
 ```bash
-python -c "import json,sys; aid=sys.argv[1]; d=json.load(open('.tmp/run_log.json')); print('HIT' if any(str(e.get('activity_id',''))==aid for e in d) else 'MISS')" <ACTIVITY_ID>
+python -c "import json,sys; aid=sys.argv[1]; d=json.load(open('users/Kevin/data/run_log.json')); print('HIT' if any(str(e.get('activity_id',''))==aid for e in d) else 'MISS')" <ACTIVITY_ID>
 ```
 
-- HIT → skip Steps 1-2, read `.tmp/run_analysis.json` directly.
+- HIT → skip Steps 1-2, read `users/Kevin/data/run_analysis.json` directly.
 - MISS → continue.
 
 ### Step 1 — Pull FIT (only on MISS)
@@ -50,17 +50,17 @@ Failures: 429 → wait 60s, retry once. Auth error → check `.env`.
 ```bash
 python tools/analyze_fit.py --quiet
 ```
-Read `.tmp/run_analysis.json` for session summary, patterns, lap splits.
+Read `users/Kevin/data/run_analysis.json` for session summary, patterns, lap splits.
 
 ### Step 3 — Compare vs prescribed
 
-Read `.tmp/coaching_state.json` for active `plan_sheet_tab`, then:
+Read `users/Kevin/data/coaching_state.json` for active `plan_sheet_tab`, then:
 
 ```bash
 python tools/sheets_read.py --tab "<plan_sheet_tab>" --date <YYYY-MM-DD>
 ```
 
-If `tools/sheets_read.py` doesn't exist yet, fall back to reading `.tmp/plan.json` directly and find the entry for today's date.
+If `tools/sheets_read.py` doesn't exist yet, fall back to reading `users/Kevin/data/plan.json` directly and find the entry for today's date.
 
 Flag deviations > 15% on distance or > 30 sec/km on pace.
 
@@ -70,7 +70,7 @@ From `run_analysis.json` patterns + lap splits, assess: cardiac decoupling, paci
 
 ### Step 5 — Benchmark against history
 
-Read `.tmp/run_log.json` for trends. Read `.tmp/personal_records.json` if present — flag any new PRs (faster 1K/5K/10K/HM split, longest run, best decoupling). Compare avg pace and HR trend over the last 4 weeks.
+Read `users/Kevin/data/run_log.json` for trends. Read `users/Kevin/data/personal_records.json` if present — flag any new PRs (faster 1K/5K/10K/HM split, longest run, best decoupling). Compare avg pace and HR trend over the last 4 weeks.
 
 ### Step 6 — Prescribe next session
 
@@ -80,7 +80,7 @@ Read `.tmp/run_log.json` for trends. Read `.tmp/personal_records.json` if presen
 1. State observation
 2. Propose specific change
 3. Ask: "Want me to update the plan?"
-4. Only edit `.tmp/plan.json` (or run `sheets_write.py --force --quiet` if it exists) after Kevin confirms
+4. Only edit `users/Kevin/data/plan.json` (or run `sheets_write.py --force --quiet` if it exists) after Kevin confirms
 
 **Never auto-modify the plan.**
 
@@ -91,7 +91,7 @@ Use the template in `workflows/references/post_run_protocols.md`. HTML formattin
 ## Tools you may need that don't exist yet
 
 - `tools/sheets_write.py` — flag to Kevin if needed
-- `tools/sheets_read.py` — fall back to `.tmp/plan.json`
+- `tools/sheets_read.py` — fall back to `users/Kevin/data/plan.json`
 
 ## Tone
 

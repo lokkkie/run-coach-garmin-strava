@@ -1,0 +1,92 @@
+{
+  "active_goal": {
+    "race_name": "23rd Fruit Kingdom Higashine Sakuranbo Marathon",
+    "race_distance_km": 21.0975,
+    "race_date": "2026-06-07",
+    "target_time": "1:47:00",
+    "target_pace_per_km": "5:07",
+    "prior_pr": null,
+    "intermediate_race": {
+      "name": "May 10 HM (low priority tune-up)",
+      "date": "2026-05-10",
+      "treatment": "controlled long tempo at 5:25/km, HR cap 170"
+    }
+  },
+  "next_goal": {
+    "race_name": "BYD Singapore Marathon",
+    "race_distance_km": 42.195,
+    "race_date": "2026-12-06",
+    "target_time": "4:00:00",
+    "training_target_time": "3:55:00",
+    "training_target_pace_per_km": "5:34",
+    "race_target_pace_per_km": "5:41",
+    "prior_pr": null,
+    "debut_marathon": true,
+    "approach": "A-goal sub-4:00 with stretch training at sub-3:55 to absorb Singapore heat/humidity penalty (~5-10 min). Plan generation deferred until post-Higashine baseline (08/06/26).",
+    "key_risks": [
+      "cramp recurrence at marathon distance - sodium protocol must be proven during Higashine block",
+      "first marathon variance - debut typically 5-10% slower than fitness predicts",
+      "Singapore heat - December 27-30C with 80%+ humidity"
+    ],
+    "planned_structure": {
+      "transition_weeks": "2026-06-08 to 2026-06-30",
+      "build_weeks": "2026-07-01 to 2026-11-15 (20 weeks Pfitzinger 18/55 -> 18/70)",
+      "taper_weeks": "2026-11-16 to 2026-12-06"
+    },
+    "confirmed_by_kevin": "2026-05-12"
+  },
+  "methodology": {
+    "current_phase": "build",
+    "phase_start_date": "2026-05-01",
+    "phase_methodology": "daniels",
+    "phase_history": [
+      {
+        "phase": "build",
+        "method": "daniels",
+        "weeks": 2,
+        "dates": "2026-05-01 to 2026-05-17"
+      },
+      {
+        "phase": "peak",
+        "method": "daniels",
+        "weeks": 1,
+        "dates": "2026-05-18 to 2026-05-24"
+      },
+      {
+        "phase": "taper",
+        "method": "daniels",
+        "weeks": 2,
+        "dates": "2026-05-25 to 2026-06-07"
+      }
+    ],
+    "vdot": 38,
+    "vdot_paces": {
+      "E": "6:20-7:05",
+      "M": "5:07",
+      "T": "4:55",
+      "I": "4:36",
+      "R": "4:10"
+    }
+  },
+  "preferences": {
+    "long_run_day": "sunday",
+    "off_limit_days": [],
+    "race_day_before": "20min easy + 4x100m strides"
+  },
+  "last_check_in_date": "2026-05-10",
+  "plan_sheet_tab": "Plan - 23rd Fruit Kingdom Higashine Sakuranbo Marathon - 2026-06-07",
+  "realism_gate": {
+    "verdict": "at-risk-but-proceeding",
+    "reasons": [
+      "weeks_available (5.3) below 8-week half marathon threshold",
+      "VDOT gap of 2 points in 5 weeks is upper bound of typical adaptation"
+    ],
+    "mitigating_factors": [
+      "base already established (no need to build)",
+      "cooler race-day weather vs Singapore training (16-18C vs 28C+) = ~1-2% performance boost",
+      "existing race-pace exposure at 5:20/km in workouts"
+    ],
+    "kevin_choice": "proceed aggressively (path 1) - confirmed 2026-05-01"
+  },
+  "data_source": "strava"
+}

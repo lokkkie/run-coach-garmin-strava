@@ -1,0 +1,36 @@
+{
+  "assessment_date": "2026-05-01",
+  "weeks_analyzed": 13,
+  "total_runs": 59,
+  "avg_weekly_km": 40,
+  "peak_weekly_km": 57,
+  "longest_run_km": 20.59,
+  "avg_pace_min_per_km": "7:00",
+  "easy_pace_range": "7:10–8:30",
+  "tempo_pace": "6:15",
+  "cruise_interval_pace": "6:04–6:25",
+  "race_pace_target_progression": ["5:40", "5:30", "5:20"],
+  "pace_trend": "improving",
+  "avg_hr_easy": 138,
+  "avg_hr_tempo": 160,
+  "estimated_max_hr": 193,
+  "avg_cadence_spm": 170,
+  "consistency_weeks_with_runs": 13,
+  "fitness_level": "intermediate",
+  "recent_race": {
+    "date": "2026-04-19",
+    "distance_km": 20.59,
+    "avg_pace": "5:28",
+    "avg_hr": 176,
+    "max_hr": 192,
+    "note": "Non-standard distance race — not a half marathon course"
+  },
+  "target_race": {
+    "name": "23rd Fruit Kingdom Higashine Sakuranbo Marathon",
+    "date": "2026-06-07",
+    "distance": "Half Marathon (21.1 km)",
+    "days_out": 37
+  },
+  "estimated_half_marathon_capability": "1:54–1:56",
+  "notes": "Kevin is an intermediate runner, not a beginner. High weekly volume (57 km/week peak in March), structured training with tempo/threshold/intervals already in place. 20+ km long runs completed. April volume reduced — likely post-race recovery. 5-week window to race means maintenance + taper, not a full build."
+}
