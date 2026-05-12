@@ -81,6 +81,13 @@ class TestFitLocalDateStr(unittest.TestCase):
         session = {"start_time": datetime(2026, 5, 5, 22, 0)}
         self.assertEqual(fit_local_date_str(session, {}), "2026-05-05")
 
+    def test_falls_back_to_string_when_both_missing(self):
+        """If neither field is a datetime, coerce to string and slice to YYYY-MM-DD.
+        Anchors the str(...)[:10] fallback so it doesn't silently change."""
+        from runcoach.fit import fit_local_date_str
+        self.assertEqual(fit_local_date_str({"start_time": "2026-05-05T12:00:00Z"}, {}), "2026-05-05")
+        self.assertEqual(fit_local_date_str({}, {}), "None")
+
 
 @unittest.skipUnless(SAMPLE_FIT.exists(),
                      f"Sample FIT not present at {SAMPLE_FIT} (regenerated on next polling cycle)")
