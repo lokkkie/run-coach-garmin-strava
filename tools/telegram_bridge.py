@@ -271,10 +271,21 @@ async def send_with_fallback(message_obj, text: str):
 # ──────────────────────────────────────────────────────────────────────
 # Per-user Claude sessions
 # ──────────────────────────────────────────────────────────────────────
+# Tools blocked for non-owner sessions. These can write to the file system or
+# execute arbitrary commands inside the project tree — owners only. Enforcing
+# at the SDK level (not just via system prompt) so a prompt-injection attempt
+# from a non-owner chat cannot reach Edit/Write/Bash even if it convinces the
+# model to try.
+NON_OWNER_DISALLOWED_TOOLS = [
+    "Bash", "PowerShell", "Edit", "Write", "NotebookEdit", "Agent",
+]
+
+
 class ClaudeSession:
     """Wraps a ClaudeSDKClient kept alive for the bridge's lifetime."""
-    def __init__(self, system_prompt: str):
+    def __init__(self, system_prompt: str, disallowed_tools: list[str] | None = None):
         self._system_prompt = system_prompt
+        self._disallowed_tools = disallowed_tools or []
         self.client: ClaudeSDKClient | None = None
         self._lock = asyncio.Lock()
 
@@ -287,10 +298,14 @@ class ClaudeSession:
                 "preset": "claude_code",
                 "append": self._system_prompt,
             },
+            disallowed_tools=list(self._disallowed_tools),
         )
         self.client = ClaudeSDKClient(options=options)
         await self.client.__aenter__()
-        log.info("Claude session started in %s", PROJECT_ROOT)
+        log.info(
+            "Claude session started in %s (disallowed_tools=%s)",
+            PROJECT_ROOT, self._disallowed_tools or "[]",
+        )
 
     async def stop(self):
         if self.client is not None:
@@ -318,10 +333,12 @@ claude_sessions: dict[str, ClaudeSession] = {}
 async def get_or_create_session(chat_id: str, user: dict) -> ClaudeSession:
     if chat_id not in claude_sessions:
         has_data = "data_dir" in user
-        prompt = make_system_prompt(user["name"], has_data, user.get("data_dir", ".tmp"), user.get("owner", False))
-        session = ClaudeSession(prompt)
+        is_owner = bool(user.get("owner"))
+        prompt = make_system_prompt(user["name"], has_data, user.get("data_dir", ".tmp"), is_owner)
+        disallowed = [] if is_owner else NON_OWNER_DISALLOWED_TOOLS
+        session = ClaudeSession(prompt, disallowed_tools=disallowed)
         await session.start()
-        log.info("Started Claude session for %s (%s)", user["name"], chat_id)
+        log.info("Started Claude session for %s (%s, owner=%s)", user["name"], chat_id, is_owner)
         claude_sessions[chat_id] = session
     return claude_sessions[chat_id]
 

@@ -84,16 +84,24 @@ Never proceed past this gate without an explicit choice from the user.
 
 ## 4. Baseline Integration
 
-Read `{data_dir}/fitness_baseline.json` (schema produced by `workflows/initial_fitness_assessment.md`). Required fields:
+Read `{data_dir}/fitness_baseline.json` (canonical schema; produced by `workflows/initial_fitness_assessment.md` from Garmin history, or by the `telegram-onboarding` skill from self-report — both use the same keys). Required fields:
 - `starting_weekly_km`, `peak_weekly_km`, `longest_run_km`
 - `easy_pace_target`, `tempo_pace_target`, `estimated_race_pace`
 - `pace_trend`, `avg_hr`, `avg_cadence_spm`, `consistency_weeks_with_runs`
+- `source` — `"garmin"` (or `"strava"`) when derived from platform data, `"self-reported"` when collected via onboarding
 
 **If baseline is missing:** halt and ask the user to run `workflows/initial_fitness_assessment.md` first. Don't guess paces — bad starting paces compound across 12+ weeks.
 
 **If baseline is older than 30 days:** ask the user to re-run the assessment. Fitness shifts; a stale baseline produces a plan calibrated to last month's runner.
 
-**If `pace_trend = "declining"` or `consistency_weeks_with_runs < 6`:** flag this to the user before generating. A declining trend during plan generation usually means something is off (overtraining, life stress, sleep) and a plan won't fix it. Ask before proceeding.
+**If `source == "self-reported"`:** treat the baseline as provisional. Self-reported paces and volume have wide error bars (users underestimate easy pace, overestimate weekly km). Proceed, but:
+- Start at the lower bound of their stated range and ramp conservatively
+- Skip the `pace_trend` and `consistency_weeks_with_runs` gates below — those need historical data the user can't provide
+- Treat `avg_hr` / `avg_cadence_spm` as missing (they're `null` for self-report)
+- Schedule a re-baseline checkpoint at the end of week 3 — by then `run_log.json` has 3 weeks of platform runs and the running-coach can recompute `easy_pace_target`, `tempo_pace_target`, and `estimated_race_pace` from actual data
+- Mention this to the user: *"Your baseline is self-reported, so I'm starting conservative. After 3 weeks of real run data I'll recalibrate paces — you might find we can push harder, or that we need to dial back."*
+
+**If `pace_trend = "declining"` or `consistency_weeks_with_runs < 6`:** flag this to the user before generating. A declining trend during plan generation usually means something is off (overtraining, life stress, sleep) and a plan won't fix it. Ask before proceeding. (Skip this check for self-reported baselines — see above.)
 
 ## 5. Methodology Selection
 

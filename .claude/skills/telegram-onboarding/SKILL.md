@@ -33,15 +33,27 @@ Only run this if no baseline file exists yet. Ask these three questions in a sin
 > 2. What's a comfortable easy pace for you — or how long does 5km take you?
 > 3. What's your longest run in the past month?
 
-Once they answer, write `{data_dir}/fitness_baseline.json`:
+Once they answer, write `{data_dir}/fitness_baseline.json` using the canonical schema (same keys as `workflows/initial_fitness_assessment.md` produces from Garmin data — so the running-coach skill can consume both without branching). Fields that can't be self-reported are `null`; the `source: "self-reported"` flag tells downstream readers the baseline is provisional.
 
 ```json
 {
   "assessment_date": "YYYY-MM-DD",
   "source": "self-reported",
+  "weeks_analyzed": null,
+  "total_runs": null,
   "avg_weekly_km": <number>,
+  "peak_weekly_km": <number, same as avg_weekly_km — be conservative>,
   "longest_run_km": <number>,
-  "easy_pace_range": "<e.g. 7:00–8:00>",
+  "avg_pace_min_per_km": "<M:SS — midpoint of their stated easy pace>",
+  "pace_trend": "unknown",
+  "avg_hr": null,
+  "avg_cadence_spm": null,
+  "consistency_weeks_with_runs": null,
+  "starting_weekly_km": <number, same as avg_weekly_km>,
+  "starting_long_run_km": <number, ~70% of longest_run_km>,
+  "easy_pace_target": "<M:SS — same as avg_pace_min_per_km>",
+  "tempo_pace_target": "<M:SS — easy minus ~30 sec/km>",
+  "estimated_race_pace": "<M:SS — easy minus ~60 sec/km, conservative>",
   "fitness_level": "<beginner|intermediate|advanced>",
   "notes": "Self-reported at onboarding. Will be enriched once platform data syncs."
 }
@@ -52,7 +64,7 @@ Once they answer, write `{data_dir}/fitness_baseline.json`:
 - `intermediate` — 15–50 km/week, running 6+ months consistently
 - `advanced` — over 50 km/week, or has completed a half or full marathon before
 
-Derive `easy_pace_range` from their reported pace or 5km time. If they say "I run 5km in 35 minutes", that's a 7:00/km easy pace — use a ±45s band around it.
+**Deriving paces from self-report.** If they say "I run 5km in 35 minutes", that's a 7:00/km easy pace. Use 7:00 for both `avg_pace_min_per_km` and `easy_pace_target`. Apply the −30/−60 offsets for tempo and estimated race pace; the running-coach skill treats these as provisional and refines them once 3–4 weeks of platform runs land in `run_log.json`.
 
 ---
 

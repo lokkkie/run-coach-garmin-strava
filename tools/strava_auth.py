@@ -274,39 +274,6 @@ def _exchange_code(redirect_url: str, user: str | None = None):
     user_flag = f" --user {user}" if user else ""
     print(f"\nNext: run `python tools/set_source.py strava{user_flag}`")
 
-    parsed = urllib.parse.urlparse(redirect_url)
-    params = urllib.parse.parse_qs(parsed.query)
-    if "error" in params:
-        print(f"ERROR: Strava returned error: {params['error'][0]}", file=sys.stderr)
-        sys.exit(1)
-    if "code" not in params:
-        print("ERROR: No authorization code found in the URL.", file=sys.stderr)
-        sys.exit(1)
-
-    code = params["code"][0]
-    print("Exchanging authorization code for tokens...")
-    resp = requests.post(
-        TOKEN_URL,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-        },
-        timeout=15,
-    )
-    resp.raise_for_status()
-    tokens = resp.json()
-
-    token_file = _token_file(user)
-    _save_tokens(tokens, token_file)
-    athlete = tokens.get("athlete", {})
-    name = f"{athlete.get('firstname', '')} {athlete.get('lastname', '')}".strip()
-    print(f"\nSaved tokens to {token_file}")
-    print(f"Authorized as: {name or '(unknown)'}")
-    user_flag = f" --user {user}" if user else ""
-    print(f"\nNext: run `python tools/set_source.py strava{user_flag}`")
-
 
 def main():
     parser = argparse.ArgumentParser(description="Strava OAuth helper")
