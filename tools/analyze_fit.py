@@ -48,10 +48,29 @@ def get_hr_zone(hr: float, max_hr: float) -> int:
     return 5
 
 
+def fit_local_date_str(session: dict, activity: dict) -> str:
+    """Return the local YYYY-MM-DD date for a FIT-parsed run.
+
+    Prefer activity.local_timestamp over session.start_time (which is UTC).
+    For runs starting late-evening local time in eastward time zones (Asia/Tokyo
+    UTC+9, etc.), the UTC date is one day earlier than the runner's local date,
+    which disagrees with Garmin Connect's startTimeLocal and Strava's
+    start_date_local. Using local_timestamp keeps both ingest paths in sync.
+    """
+    local_dt = activity.get("local_timestamp")
+    if isinstance(local_dt, datetime):
+        return local_dt.strftime("%Y-%m-%d")
+    start_time = session.get("start_time")
+    if isinstance(start_time, datetime):
+        return start_time.strftime("%Y-%m-%d")
+    return str(start_time)[:10]
+
+
 def parse_fit(fit_path: Path) -> dict:
     fitfile = fitparse.FitFile(str(fit_path))
 
     session = {}
+    activity = {}  # carries local_timestamp; session.start_time is UTC
     laps = []
     records = []  # per-second data points
 
@@ -61,6 +80,8 @@ def parse_fit(fit_path: Path) -> dict:
 
         if name == "session":
             session = data
+        elif name == "activity":
+            activity = data
         elif name == "lap":
             laps.append(data)
         elif name == "record":
@@ -151,7 +172,7 @@ def parse_fit(fit_path: Path) -> dict:
         if first_avg and second_avg:
             negative_split = second_avg < first_avg  # True = sped up
 
-    date_str = (start_time.strftime("%Y-%m-%d") if isinstance(start_time, datetime) else str(start_time)[:10])
+    date_str = fit_local_date_str(session, activity)
 
     result = {
         "date": date_str,
