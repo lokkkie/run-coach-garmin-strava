@@ -62,6 +62,40 @@ def _refresh_tokens(client_id: str, client_secret: str, refresh_token: str) -> d
     return resp.json()
 
 
+def complete_oauth(code: str, user: str | None = None) -> dict:
+    """Exchange an OAuth authorization code for tokens and persist them to the
+    user's token file at `{data_dir}/strava_token.json`. Returns the saved
+    bundle (access_token, refresh_token, expires_at, athlete).
+
+    Used by `tools/strava_auth.py` for both the localhost-redirect setup flow
+    and the manual paste-the-redirect-URL flow — both paths converge here.
+    Raises RuntimeError if STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET are missing.
+    """
+    client_id = os.getenv("STRAVA_CLIENT_ID")
+    client_secret = os.getenv("STRAVA_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise RuntimeError(
+            "STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET missing in .env. "
+            "Create an app at https://www.strava.com/settings/api"
+        )
+
+    resp = requests.post(
+        TOKEN_URL,
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    tokens = resp.json()
+
+    _save_tokens(tokens, _token_file(user))
+    return tokens
+
+
 def get_access_token(user: str | None = None) -> str:
     """Return a currently-valid Strava access token for the given user.
 

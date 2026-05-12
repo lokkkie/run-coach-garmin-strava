@@ -13,37 +13,46 @@ from pathlib import Path
 from unittest import mock
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+sys.path.insert(0, str(PROJECT_ROOT))               # for `runcoach.*`
+sys.path.insert(0, str(PROJECT_ROOT / "tools"))     # for sibling tool imports
 
 
 class TestStravaAuthSingleExchange(unittest.TestCase):
-    """Fix #1: _exchange_code must POST to Strava's token endpoint exactly once."""
+    """Fix #1: the CLI's _exchange_code (and the library's complete_oauth it
+    now wraps) must POST to Strava's token endpoint exactly once. The original
+    bug was a copy-paste duplication that POSTed twice — once successfully,
+    then again with the now-spent authorization code, which Strava rejects.
+
+    After the runcoach.strava refactor the actual POST happens inside
+    `runcoach.strava.complete_oauth`. Both the localhost-redirect setup flow
+    (_setup) and the paste-the-URL manual flow (_exchange_code) converge
+    there, so a single-POST guarantee on `complete_oauth` covers both."""
 
     def test_exchange_code_posts_once(self):
+        sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+        import strava_auth
+
+        fake_resp = mock.MagicMock()
+        fake_resp.json.return_value = {
+            "access_token": "AT", "refresh_token": "RT",
+            "expires_at": 9999999999, "athlete": {"firstname": "Test"},
+        }
+        fake_resp.raise_for_status = mock.MagicMock()
+
         with mock.patch.dict(os.environ, {
             "STRAVA_CLIENT_ID": "fake_id",
             "STRAVA_CLIENT_SECRET": "fake_secret",
-        }):
-            import strava_auth  # imported lazily so the env patch is in effect
+        }), mock.patch("runcoach.strava.requests.post", return_value=fake_resp) as m_post, \
+           mock.patch("runcoach.strava._save_tokens") as m_save:
+            strava_auth._exchange_code(
+                "http://localhost:53682/?code=abc123&scope=read",
+                user="TestUser",
+            )
 
-            fake_resp = mock.MagicMock()
-            fake_resp.json.return_value = {
-                "access_token": "AT", "refresh_token": "RT",
-                "expires_at": 9999999999, "athlete": {"firstname": "Test"},
-            }
-            fake_resp.raise_for_status = mock.MagicMock()
-
-            with mock.patch.object(strava_auth.requests, "post", return_value=fake_resp) as m_post, \
-                 mock.patch.object(strava_auth, "_save_tokens") as m_save:
-                strava_auth._exchange_code(
-                    "http://localhost:53682/?code=abc123&scope=read",
-                    user="TestUser",
-                )
-
-            self.assertEqual(m_post.call_count, 1,
-                             f"Expected exactly 1 POST to Strava token endpoint, got {m_post.call_count}")
-            self.assertEqual(m_save.call_count, 1,
-                             f"Expected exactly 1 token-file write, got {m_save.call_count}")
+        self.assertEqual(m_post.call_count, 1,
+                         f"Expected exactly 1 POST to Strava token endpoint, got {m_post.call_count}")
+        self.assertEqual(m_save.call_count, 1,
+                         f"Expected exactly 1 token-file write, got {m_save.call_count}")
 
 
 class TestNonOwnerToolRestriction(unittest.TestCase):

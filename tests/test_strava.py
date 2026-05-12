@@ -170,5 +170,70 @@ class TestGetAccessToken(unittest.TestCase):
             self.assertIn("STRAVA_CLIENT_ID", str(cm.exception))
 
 
+class TestCompleteOauth(unittest.TestCase):
+    """complete_oauth exchanges an authorization code for tokens and persists
+    them. Both CLI entry points (--setup localhost redirect, --redirect-url
+    manual paste) converge through this function."""
+
+    def test_posts_authorization_code_grant(self):
+        from runcoach.strava import complete_oauth
+        with tempfile.TemporaryDirectory() as d:
+            with mock.patch("runcoach.paths.PROJECT_ROOT", Path(d)), \
+                 mock.patch.dict(os.environ, {"STRAVA_CLIENT_ID": "id", "STRAVA_CLIENT_SECRET": "sec"}, clear=True):
+                fake_resp = mock.MagicMock()
+                fake_resp.json.return_value = {
+                    "access_token": "AT", "refresh_token": "RT",
+                    "expires_at": int(time.time()) + 7200,
+                    "athlete": {"firstname": "Test"},
+                }
+                fake_resp.raise_for_status = mock.MagicMock()
+                with mock.patch("runcoach.strava.requests.post", return_value=fake_resp) as m_post:
+                    tokens = complete_oauth("auth_code_xyz", user="Alice")
+
+                self.assertEqual(m_post.call_count, 1)
+                call = m_post.call_args
+                self.assertEqual(call.kwargs["data"]["grant_type"], "authorization_code")
+                self.assertEqual(call.kwargs["data"]["code"], "auth_code_xyz")
+                self.assertEqual(call.kwargs["data"]["client_id"], "id")
+                self.assertEqual(call.kwargs["data"]["client_secret"], "sec")
+                self.assertEqual(tokens["access_token"], "AT")
+
+    def test_persists_tokens_to_per_user_file(self):
+        from runcoach.strava import _load_tokens, complete_oauth
+        with tempfile.TemporaryDirectory() as d:
+            with mock.patch("runcoach.paths.PROJECT_ROOT", Path(d)), \
+                 mock.patch.dict(os.environ, {"STRAVA_CLIENT_ID": "id", "STRAVA_CLIENT_SECRET": "sec"}, clear=True):
+                fake_resp = mock.MagicMock()
+                fake_resp.json.return_value = {
+                    "access_token": "AT", "refresh_token": "RT",
+                    "expires_at": 9999999999, "athlete": {},
+                }
+                fake_resp.raise_for_status = mock.MagicMock()
+                with mock.patch("runcoach.strava.requests.post", return_value=fake_resp):
+                    complete_oauth("code", user="Bob")
+                saved = _load_tokens(Path(d) / "users" / "Bob" / "data" / "strava_token.json")
+                self.assertEqual(saved["access_token"], "AT")
+
+    def test_raises_when_client_id_missing(self):
+        from runcoach.strava import complete_oauth
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError) as cm:
+                complete_oauth("code", user=None)
+            self.assertIn("STRAVA_CLIENT_ID", str(cm.exception))
+
+    def test_propagates_http_error_from_strava(self):
+        """A bad code (e.g. already used — the bug that triggered the original
+        double-exchange fix back in commit dc664e5) must surface, not silently
+        save garbage tokens."""
+        import requests as _requests
+        from runcoach.strava import complete_oauth
+        with mock.patch.dict(os.environ, {"STRAVA_CLIENT_ID": "id", "STRAVA_CLIENT_SECRET": "sec"}, clear=True):
+            fake_resp = mock.MagicMock()
+            fake_resp.raise_for_status.side_effect = _requests.HTTPError("400 Bad Request: code already used")
+            with mock.patch("runcoach.strava.requests.post", return_value=fake_resp):
+                with self.assertRaises(_requests.HTTPError):
+                    complete_oauth("stale_code", user=None)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

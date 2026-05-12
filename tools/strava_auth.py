@@ -33,13 +33,10 @@ import urllib.parse
 import webbrowser
 from pathlib import Path
 
-import requests
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.strava import (  # noqa: E402
-    TOKEN_URL,
-    _save_tokens,
     _token_file,
+    complete_oauth,
     get_access_token,
 )
 
@@ -88,22 +85,6 @@ class _RedirectHandler(http.server.BaseHTTPRequestHandler):
         return  # silence default access log
 
 
-def _post_authorization_code(client_id: str, client_secret: str, code: str) -> dict:
-    """Exchange an OAuth authorization code for an access + refresh token bundle."""
-    resp = requests.post(
-        TOKEN_URL,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-        },
-        timeout=15,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
 def _setup(user: str | None = None):
     client_id = os.getenv("STRAVA_CLIENT_ID")
     client_secret = os.getenv("STRAVA_CLIENT_SECRET")
@@ -144,8 +125,7 @@ def _setup(user: str | None = None):
         sys.exit(1)
 
     print("Got authorization code, exchanging for tokens...")
-    tokens = _post_authorization_code(client_id, client_secret, _received["code"])
-    _save_tokens(tokens, token_file)
+    tokens = complete_oauth(_received["code"], user=user)
     athlete = tokens.get("athlete", {})
     name = f"{athlete.get('firstname', '')} {athlete.get('lastname', '')}".strip()
     print(f"Saved tokens to {token_file}")
@@ -181,9 +161,6 @@ def _manual_exchange(user: str | None = None):
 
 def _exchange_code(redirect_url: str, user: str | None = None):
     """Exchange an authorization code from a pasted redirect URL for tokens."""
-    client_id = os.getenv("STRAVA_CLIENT_ID")
-    client_secret = os.getenv("STRAVA_CLIENT_SECRET")
-
     parsed = urllib.parse.urlparse(redirect_url)
     params = urllib.parse.parse_qs(parsed.query)
     if "error" in params:
@@ -194,13 +171,11 @@ def _exchange_code(redirect_url: str, user: str | None = None):
         sys.exit(1)
 
     print("Exchanging authorization code for tokens...")
-    tokens = _post_authorization_code(client_id, client_secret, params["code"][0])
+    tokens = complete_oauth(params["code"][0], user=user)
 
-    token_file = _token_file(user)
-    _save_tokens(tokens, token_file)
     athlete = tokens.get("athlete", {})
     name = f"{athlete.get('firstname', '')} {athlete.get('lastname', '')}".strip()
-    print(f"Saved tokens to {token_file}")
+    print(f"Saved tokens to {_token_file(user)}")
     print(f"Authorized as: {name or '(unknown)'}")
     user_flag = f" --user {user}" if user else ""
     print(f"\nNext: run `python tools/set_source.py strava{user_flag}`")
