@@ -39,7 +39,6 @@ from runcoach.paths import (  # noqa: E402
     data_dir_for,
     load_allowlist,
 )
-from runcoach.fit import extract_fit_bytes  # noqa: E402
 
 QUIET = False
 
@@ -200,10 +199,13 @@ def _post_ingest(user: dict, data_dir: Path, activity_id: str, date_str: str):
 
 def _run_garmin(user: dict, data_dir: Path):
     """Garmin polling path — login, fetch latest activity, download .FIT, analyse."""
-    # Import lazily so users without garminconnect installed can still run the
-    # Strava-only path.
-    sys.path.insert(0, str(PROJECT_ROOT / "tools"))
-    from garmin_auth import get_garmin_client  # noqa: E402
+    # Lazy import so users without garminconnect installed can still run the
+    # Strava-only path (Garmin auth requires the garminconnect package).
+    from runcoach.garmin import (
+        download_fit,
+        get_garmin_client,
+        is_rate_limit_error,
+    )
 
     name = user["name"]
     log(f"[{name}] Starting Garmin polling check...")
@@ -211,12 +213,11 @@ def _run_garmin(user: dict, data_dir: Path):
     try:
         client = get_garmin_client(name)
     except SystemExit:
-        # garmin_auth already logged the error; skip this user, don't kill the loop.
+        # runcoach.garmin already logged to stderr; skip this user, don't kill the loop.
         log(f"[{name}] Garmin credentials unavailable; skipping.")
         return
     except Exception as e:
-        msg = str(e)
-        if "429" in msg or "rate limit" in msg.lower():
+        if is_rate_limit_error(e):
             log(f"[{name}] Rate limited by Garmin (429). Will retry next hour.")
             return
         log(f"[{name}] Garmin login failed: {e}")
@@ -252,10 +253,7 @@ def _run_garmin(user: dict, data_dir: Path):
     log(f"[{name}] NEW run detected: activity_id={activity_id}, date={date_str}")
 
     try:
-        raw = client.download_activity(
-            activity_id, dl_fmt=client.ActivityDownloadFormat.ORIGINAL
-        )
-        fit_data = extract_fit_bytes(raw)
+        fit_data = download_fit(client, activity_id)
     except Exception as e:
         log(f"[{name}] FIT download failed: {e}")
         return

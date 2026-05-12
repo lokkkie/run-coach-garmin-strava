@@ -17,15 +17,15 @@ Exit codes:
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
-from garminconnect import Garmin
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import runcoach.paths  # noqa: F401, E402
-from garmin_auth import get_garmin_client  # noqa: E402
+from runcoach.garmin import (  # noqa: E402
+    get_garmin_client,
+    is_rate_limit_error,
+    latest_running_activity,
+)
 
 # Quiet down the SSO/login chatter that garminconnect prints
 for name in ("garminconnect", "garth", "urllib3"):
@@ -42,29 +42,25 @@ def main():
     except SystemExit:
         raise
     except Exception as e:
-        msg = str(e)
-        if "429" in msg or "rate limit" in msg.lower():
+        if is_rate_limit_error(e):
             print("Rate limited (429)", file=sys.stderr)
             sys.exit(2)
         print(f"Auth error: {e}", file=sys.stderr)
         sys.exit(1)
 
     try:
-        activities = client.get_activities(0, 5)
+        activity = latest_running_activity(client, search_count=5)
     except Exception as e:
         print(f"Activity fetch failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Find the most recent running activity (skip non-running entries)
-    for a in activities:
-        if a.get("activityType", {}).get("typeKey", "") == "running":
-            print(str(a["activityId"]))
-            print(a.get("startTimeLocal", "")[:10])
-            print(a.get("activityName", ""))
-            return
+    if activity is None:
+        print("No recent running activity found", file=sys.stderr)
+        sys.exit(1)
 
-    print("No recent running activity found", file=sys.stderr)
-    sys.exit(1)
+    print(str(activity["activityId"]))
+    print(activity.get("startTimeLocal", "")[:10])
+    print(activity.get("activityName", ""))
 
 
 if __name__ == "__main__":

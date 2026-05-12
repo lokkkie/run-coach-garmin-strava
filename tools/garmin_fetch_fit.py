@@ -10,16 +10,16 @@ Output: {data_dir}/run_YYYY-MM-DD.fit
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
-from garminconnect import Garmin
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.paths import data_dir as _data_dir  # noqa: E402
-from runcoach.fit import extract_fit_bytes  # noqa: E402
-from garmin_auth import get_garmin_client  # noqa: E402
+from runcoach.garmin import (  # noqa: E402
+    download_fit,
+    get_garmin_client,
+    latest_running_activity,
+)
 
 QUIET = False
 
@@ -27,15 +27,6 @@ QUIET = False
 def info(msg):
     if not QUIET:
         print(msg)
-
-
-def get_latest_run_id(client: Garmin) -> tuple[str, str]:
-    """Return (activity_id, date_str) for the most recent running activity."""
-    activities = client.get_activities(0, 10)
-    for a in activities:
-        if a.get("activityType", {}).get("typeKey", "") == "running":
-            return str(a["activityId"]), a.get("startTimeLocal", "unknown")[:10]
-    raise RuntimeError("No recent running activities found in the last 10 activities.")
 
 
 def main():
@@ -62,11 +53,14 @@ def main():
         date_str = details.get("summaryDTO", {}).get("startTimeLocal", "unknown")[:10]
     else:
         info("Finding latest running activity...")
-        activity_id, date_str = get_latest_run_id(client)
+        activity = latest_running_activity(client)
+        if activity is None:
+            raise RuntimeError("No recent running activities found in the last 10 activities.")
+        activity_id = str(activity["activityId"])
+        date_str = activity.get("startTimeLocal", "unknown")[:10]
 
     info(f"Downloading .FIT for activity {activity_id} ({date_str})...")
-    raw = client.download_activity(activity_id, dl_fmt=client.ActivityDownloadFormat.ORIGINAL)
-    fit_data = extract_fit_bytes(raw)
+    fit_data = download_fit(client, activity_id)
 
     data_dir.mkdir(parents=True, exist_ok=True)
     out_file = data_dir / f"run_{date_str}.fit"

@@ -18,7 +18,7 @@ from garminconnect import Garmin
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.paths import data_dir as _data_dir  # noqa: E402
 from runcoach.metrics import pace_from_speed  # noqa: E402
-from garmin_auth import get_garmin_client  # noqa: E402
+from runcoach.garmin import get_garmin_client  # noqa: E402
 
 FIELDNAMES = [
     "date",
