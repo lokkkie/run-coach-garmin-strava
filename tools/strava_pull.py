@@ -21,36 +21,15 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.paths import data_dir as _data_dir  # noqa: E402
 from runcoach.run_log import append_run  # noqa: E402
+from runcoach.metrics import (  # noqa: E402
+    get_hr_zone,
+    pace_from_distance_time,
+    pace_from_speed,
+    pace_to_sec,
+)
 from strava_auth import get_access_token  # noqa: E402
 
 API_BASE = "https://www.strava.com/api/v3"
-
-HR_ZONE_BOUNDARIES = [0.50, 0.60, 0.70, 0.80, 0.90, 1.0]
-
-
-def pace_from_speed(speed_m_per_s: float) -> str:
-    if not speed_m_per_s or speed_m_per_s <= 0:
-        return ""
-    sec_per_km = 1000 / speed_m_per_s
-    mins = int(sec_per_km // 60)
-    secs = int(sec_per_km % 60)
-    return f"{mins}:{secs:02d}"
-
-
-def pace_from_distance_time(distance_m: float, time_s: float) -> str:
-    if not distance_m or not time_s or distance_m <= 0 or time_s <= 0:
-        return ""
-    return pace_from_speed(distance_m / time_s)
-
-
-def get_hr_zone(hr: float, max_hr: float) -> int:
-    if not hr or not max_hr:
-        return 0
-    pct = hr / max_hr
-    for i, boundary in enumerate(HR_ZONE_BOUNDARIES[1:], start=1):
-        if pct <= boundary:
-            return i
-    return 5
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -163,12 +142,6 @@ def build_laps(laps: list[dict]) -> tuple[list[dict], bool | None]:
 
     negative_split = None
     if len(splits) >= 2:
-        def pace_to_sec(p):
-            try:
-                m, s = p.split(":")
-                return int(m) * 60 + int(s)
-            except (ValueError, AttributeError):
-                return None
         mid = len(splits) // 2
         first = list(filter(None, (pace_to_sec(s["pace"]) for s in splits[:mid])))
         second = list(filter(None, (pace_to_sec(s["pace"]) for s in splits[mid:])))

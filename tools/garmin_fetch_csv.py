@@ -17,6 +17,7 @@ from garminconnect import Garmin
 # Make runcoach importable when invoked as `python tools/garmin_fetch_csv.py`.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.paths import data_dir as _data_dir  # noqa: E402
+from runcoach.metrics import pace_from_speed  # noqa: E402
 from garmin_auth import get_garmin_client  # noqa: E402
 
 FIELDNAMES = [
@@ -33,16 +34,6 @@ FIELDNAMES = [
     "calories",
     "training_effect_aerobic",
 ]
-
-
-def pace_from_speed(speed_m_per_s: float) -> str:
-    """Convert m/s to mm:ss per km string. Returns '' if speed is 0."""
-    if not speed_m_per_s:
-        return ""
-    sec_per_km = 1000 / speed_m_per_s
-    mins = int(sec_per_km // 60)
-    secs = int(sec_per_km % 60)
-    return f"{mins}:{secs:02d}"
 
 
 def fetch_activities(client: Garmin, days: int) -> list[dict]:

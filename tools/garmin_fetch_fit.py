@@ -9,17 +9,16 @@ Output: {data_dir}/run_YYYY-MM-DD.fit
 """
 
 import argparse
-import io
 import logging
 import os
 import sys
-import zipfile
 from pathlib import Path
 
 from garminconnect import Garmin
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.paths import data_dir as _data_dir  # noqa: E402
+from runcoach.fit import extract_fit_bytes  # noqa: E402
 from garmin_auth import get_garmin_client  # noqa: E402
 
 QUIET = False
@@ -28,21 +27,6 @@ QUIET = False
 def info(msg):
     if not QUIET:
         print(msg)
-
-
-def extract_fit_bytes(raw: bytes) -> bytes:
-    """Garmin's ORIGINAL download format returns a ZIP containing the .FIT.
-    If raw starts with the ZIP magic bytes, extract the first .fit member.
-    Otherwise (rare — older endpoints) return raw as-is."""
-    if raw[:4] == b"PK\x03\x04":
-        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-            fit_names = [n for n in zf.namelist() if n.lower().endswith(".fit")]
-            if not fit_names:
-                raise RuntimeError(
-                    f"No .fit file in ZIP archive. Members: {zf.namelist()}"
-                )
-            return zf.read(fit_names[0])
-    return raw
 
 
 def get_latest_run_id(client: Garmin) -> tuple[str, str]:

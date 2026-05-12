@@ -24,13 +24,11 @@ Usage:
 """
 
 import argparse
-import io
 import json
 import logging
 import os
 import subprocess
 import sys
-import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -41,6 +39,7 @@ from runcoach.paths import (  # noqa: E402
     data_dir_for,
     load_allowlist,
 )
+from runcoach.fit import extract_fit_bytes  # noqa: E402
 
 QUIET = False
 
@@ -49,20 +48,6 @@ QUIET = False
 # normal noise (battery, transient API failure) but tight enough to catch a
 # multi-day Task Scheduler outage on the first resumed run.
 HEARTBEAT_STALE_AFTER = timedelta(hours=26)
-
-
-def extract_fit_bytes(raw: bytes) -> bytes:
-    """Garmin's ORIGINAL download format returns a ZIP containing the .FIT.
-    If raw starts with the ZIP magic bytes, extract the first .fit member."""
-    if raw[:4] == b"PK\x03\x04":
-        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-            fit_names = [n for n in zf.namelist() if n.lower().endswith(".fit")]
-            if not fit_names:
-                raise RuntimeError(
-                    f"No .fit file in ZIP archive. Members: {zf.namelist()}"
-                )
-            return zf.read(fit_names[0])
-    return raw
 
 
 def log(msg: str):

@@ -10,7 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+sys.path.insert(0, str(PROJECT_ROOT))               # for `runcoach.*`
+sys.path.insert(0, str(PROJECT_ROOT / "tools"))     # for sibling `telegram_bridge`
 
 
 class TestFitLocalDate(unittest.TestCase):
@@ -19,7 +20,7 @@ class TestFitLocalDate(unittest.TestCase):
 
     def test_late_evening_local_returns_local_date(self):
         """Run starts 23:30 local in UTC+8 → 15:30 UTC same day. Local date wins."""
-        from analyze_fit import fit_local_date_str
+        from runcoach.fit import fit_local_date_str
         session = {"start_time": datetime(2026, 5, 6, 15, 30)}
         activity = {"local_timestamp": datetime(2026, 5, 6, 23, 30)}
         self.assertEqual(fit_local_date_str(session, activity), "2026-05-06")
@@ -27,21 +28,21 @@ class TestFitLocalDate(unittest.TestCase):
     def test_crosses_midnight_utc_returns_local_date(self):
         """Run starts 07:00 local in UTC+9 → 22:00 UTC the day before.
         Without the fix this returns 2026-05-05; with the fix it returns 2026-05-06."""
-        from analyze_fit import fit_local_date_str
+        from runcoach.fit import fit_local_date_str
         session = {"start_time": datetime(2026, 5, 5, 22, 0)}
         activity = {"local_timestamp": datetime(2026, 5, 6, 7, 0)}
         self.assertEqual(fit_local_date_str(session, activity), "2026-05-06")
 
     def test_falls_back_to_utc_when_local_missing(self):
         """If activity.local_timestamp is absent, fall back to session.start_time."""
-        from analyze_fit import fit_local_date_str
+        from runcoach.fit import fit_local_date_str
         session = {"start_time": datetime(2026, 5, 5, 22, 0)}
         activity = {}
         self.assertEqual(fit_local_date_str(session, activity), "2026-05-05")
 
     def test_falls_back_to_string_when_both_missing(self):
         """If neither is a datetime, coerce to string and slice to YYYY-MM-DD."""
-        from analyze_fit import fit_local_date_str
+        from runcoach.fit import fit_local_date_str
         self.assertEqual(fit_local_date_str({"start_time": "2026-05-05T12:00:00Z"}, {}), "2026-05-05")
         self.assertEqual(fit_local_date_str({}, {}), "None")
 
