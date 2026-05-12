@@ -45,6 +45,12 @@ def pace_from_speed(speed_m_per_s: float) -> str:
     return f"{mins}:{secs:02d}"
 
 
+def pace_from_distance_time(distance_m: float, time_s: float) -> str:
+    if not distance_m or not time_s or distance_m <= 0 or time_s <= 0:
+        return ""
+    return pace_from_speed(distance_m / time_s)
+
+
 def get_hr_zone(hr: float, max_hr: float) -> int:
     if not hr or not max_hr:
         return 0
@@ -84,15 +90,14 @@ def fetch_latest_run_id(token: str) -> str:
 # ──────────────────────────────────────────────────────────────────────
 def build_session(activity: dict) -> dict:
     distance_m = activity.get("distance") or 0
-    moving_s = activity.get("moving_time") or 0
-    avg_speed = activity.get("average_speed") or 0
+    elapsed_s = activity.get("elapsed_time") or 0
     max_speed = activity.get("max_speed") or 0
     avg_cadence = activity.get("average_cadence")  # single-foot cadence (per min)
 
     return {
         "distance_km": round(distance_m / 1000, 2),
-        "duration_min": round(moving_s / 60, 1),
-        "avg_pace": pace_from_speed(avg_speed),
+        "duration_min": round(elapsed_s / 60, 1),
+        "avg_pace": pace_from_distance_time(distance_m, elapsed_s),
         "max_pace": pace_from_speed(max_speed),
         "avg_hr": activity.get("average_heartrate"),
         "max_hr": activity.get("max_heartrate"),
@@ -151,14 +156,13 @@ def build_laps(laps: list[dict]) -> tuple[list[dict], bool | None]:
     splits = []
     for i, lap in enumerate(laps, start=1):
         lap_dist = lap.get("distance") or 0
-        lap_time = lap.get("moving_time") or 0
-        lap_speed = lap.get("average_speed") or 0
+        lap_time = lap.get("elapsed_time") or 0
         avg_cad = lap.get("average_cadence")
         splits.append({
             "lap": i,
             "distance_km": round(lap_dist / 1000, 3),
             "duration_min": round(lap_time / 60, 2),
-            "pace": pace_from_speed(lap_speed),
+            "pace": pace_from_distance_time(lap_dist, lap_time),
             "avg_hr": lap.get("average_heartrate"),
             "max_hr": lap.get("max_heartrate"),
             "avg_cadence_spm": (avg_cad or 0) * 2 or None,
