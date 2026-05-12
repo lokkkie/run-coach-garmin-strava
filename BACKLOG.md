@@ -40,15 +40,13 @@ Deferred fixes from the project review. Update or remove entries as they get don
 
 **Why not now.** Adds a deployment step (`pip install -e .`) the user has to run once on the home PC. The current bootstrap is ugly but consistent and works without that step.
 
-### Continued module extraction (the rest of review fix #6)
+### Strava OAuth setup → runcoach.strava (partial; deferred remainder)
 
-`runcoach/paths.py` is in place. Still to extract:
-- `runcoach/run_log.py` — the append-with-dedup logic duplicated between `analyze_fit.py` and `strava_pull.py`.
-- `runcoach/fit.py` — `pace_from_speed`, `get_hr_zone`, `fit_local_date_str`, the FIT parsing.
-- `runcoach/telegram_format.py` — `smart_split`, `_open_tags_at`, `_split_is_inside_tag`, `_HTML_TAG_RE`, `_TELEGRAM_HTML_TAGS`.
-- `runcoach/garmin.py` + `runcoach/strava.py` — auth and activity fetching consolidated.
+The Strava OAuth setup flow (browser redirect, code-exchange, write-side) still lives in `tools/strava_auth.py`. The read-side (`get_access_token`, `api_get`, `latest_run`, `fetch_activity` / `_streams` / `_laps`, `StravaRateLimited`) has moved to `runcoach.strava`. The remaining setup-flow code is tightly coupled to its CLI shape — localhost server, `webbrowser.open`, redirect URL parsing — so leaving it there is a deliberate choice; a future cleanup could split that into a reusable `runcoach.strava.exchange_authorization_code(code, user)` plus a CLI shim, but the gain is small.
 
-Each is a small targeted commit (the paths migration was the riskiest one — every tool touched, all 49 tests still pass, smoke-tested polling end-to-end).
+### Negative-split sub-second precision (deferred from review review)
+
+`runcoach.fit.parse_fit` and `tools/strava_pull.py` both detect negative-split by averaging lap paces — currently via `pace_to_sec(pace_from_speed(...))`, a round-trip through `"M:SS"` strings that loses sub-second precision. For two halves that differ by < 1 sec/km the comparison can flip. Fix: keep lap speed/time as floats, compute mean speed per half, compare in float space. Pinned in `tests/test_metrics.py::test_roundtrip_loses_subsecond_precision`.
 
 ---
 
