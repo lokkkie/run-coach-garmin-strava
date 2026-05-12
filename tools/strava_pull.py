@@ -20,6 +20,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.paths import data_dir as _data_dir  # noqa: E402
+from runcoach.run_log import append_run  # noqa: E402
 from strava_auth import get_access_token  # noqa: E402
 
 API_BASE = "https://www.strava.com/api/v3"
@@ -178,39 +179,6 @@ def build_laps(laps: list[dict]) -> tuple[list[dict], bool | None]:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# run_log.json append (mirrors analyze_fit.append_to_log)
-# ──────────────────────────────────────────────────────────────────────
-def append_to_log(analysis: dict, activity_id: str, log_file: Path):
-    log = []
-    if log_file.exists():
-        with open(log_file, encoding="utf-8") as f:
-            log = json.load(f)
-
-    existing_ids = {str(e.get("activity_id", "")) for e in log if e.get("activity_id")}
-    if str(activity_id) in existing_ids:
-        return False  # already logged
-
-    log.append({
-        "activity_id": str(activity_id),
-        "date": analysis["date"],
-        "distance_km": analysis["session"]["distance_km"],
-        "duration_min": analysis["session"]["duration_min"],
-        "avg_pace": analysis["session"]["avg_pace"],
-        "avg_hr": analysis["session"]["avg_hr"],
-        "max_hr": analysis["session"]["max_hr"],
-        "avg_cadence_spm": analysis["session"]["avg_cadence_spm"],
-        "elevation_gain_m": analysis["session"]["elevation_gain_m"],
-        "cardiac_decoupling_pct": analysis["patterns"]["cardiac_decoupling_pct"],
-        "negative_split": analysis["patterns"]["negative_split"],
-        "source": "strava",
-    })
-    log.sort(key=lambda r: r["date"])
-    with open(log_file, "w", encoding="utf-8") as f:
-        json.dump(log, f, indent=2)
-    return True
-
-
-# ──────────────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────────────
 def main():
@@ -225,7 +193,6 @@ def main():
             print(msg)
 
     data_dir = _data_dir(args.user)
-    log_file = data_dir / "run_log.json"
 
     try:
         token = get_access_token(user=args.user)
@@ -271,7 +238,7 @@ def main():
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(analysis, f, indent=2)
 
-    appended = append_to_log(analysis, activity_id, log_file)
+    appended = append_run(analysis, activity_id, data_dir, source="strava")
 
     if args.quiet:
         print(f"OK {out_file}")

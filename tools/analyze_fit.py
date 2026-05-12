@@ -17,6 +17,7 @@ import fitparse
 # Make runcoach importable when invoked as `python tools/analyze_fit.py`.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.paths import data_dir as _data_dir  # noqa: E402
+from runcoach.run_log import append_run  # noqa: E402
 
 
 # Garmin HR zone boundaries (% of max HR). Adjust if Kevin's max HR is known.
@@ -205,46 +206,6 @@ def parse_fit(fit_path: Path) -> dict:
     return result
 
 
-def load_run_log(data_dir: Path) -> list[dict]:
-    log_file = data_dir / "run_log.json"
-    if log_file.exists():
-        with open(log_file, encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-
-def append_to_log(run: dict, data_dir: Path, activity_id: str | None = None):
-    log_file = data_dir / "run_log.json"
-    log = load_run_log(data_dir)
-    existing_ids = {r.get("activity_id") for r in log if r.get("activity_id")}
-    existing_dates = {r["date"] for r in log if not r.get("activity_id")}
-
-    is_duplicate = (activity_id and activity_id in existing_ids) or \
-                   (not activity_id and run["date"] in existing_dates)
-
-    if not is_duplicate:
-        log.append({
-            "activity_id": activity_id,
-            "date": run["date"],
-            "distance_km": run["session"]["distance_km"],
-            "duration_min": run["session"]["duration_min"],
-            "avg_pace": run["session"]["avg_pace"],
-            "avg_hr": run["session"]["avg_hr"],
-            "max_hr": run["session"]["max_hr"],
-            "avg_cadence_spm": run["session"]["avg_cadence_spm"],
-            "elevation_gain_m": run["session"]["elevation_gain_m"],
-            "cardiac_decoupling_pct": run["patterns"]["cardiac_decoupling_pct"],
-            "negative_split": run["patterns"]["negative_split"],
-            "source": "garmin",
-        })
-        log.sort(key=lambda r: r["date"])
-        with open(log_file, "w", encoding="utf-8") as f:
-            json.dump(log, f, indent=2)
-        print(f"Appended run to {log_file} ({len(log)} total entries).")
-    else:
-        print(f"Run already in log — skipping append.")
-
-
 def read_last_activity_id(data_dir: Path) -> str | None:
     """Read activity_id from {data_dir}/last_activity_id.txt (line 1) if it exists."""
     f = data_dir / "last_activity_id.txt"
@@ -290,13 +251,7 @@ def main():
 
     activity_id = args.activity_id or read_last_activity_id(data_dir)
 
-    if args.quiet:
-        print(f"OK {out_file}")
-        import io as _io, contextlib
-        buf = _io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            append_to_log(analysis, data_dir, activity_id=activity_id)
-    else:
+    if not args.quiet:
         print(f"Analysis saved to {out_file}")
         s = analysis["session"]
         p = analysis["patterns"]
@@ -305,7 +260,22 @@ def main():
         print(f"  Avg HR: {s['avg_hr']}  |  Max HR: {s['max_hr']}  |  Cadence: {s['avg_cadence_spm']} spm")
         print(f"  Cardiac decoupling: {p['cardiac_decoupling_pct']}%  |  Negative split: {p['negative_split']}")
         print(f"  Laps: {len(analysis['lap_splits'])}")
-        append_to_log(analysis, data_dir, activity_id=activity_id)
+
+    if activity_id is None:
+        # No activity_id means we can't dedup — skip run_log to keep it clean.
+        msg = "Skipped run_log append: no activity_id available (pass --activity-id or write last_activity_id.txt)."
+        if args.quiet:
+            print(f"OK {out_file}")
+            print(msg, file=sys.stderr)
+        else:
+            print(msg)
+    else:
+        appended = append_run(analysis, activity_id, data_dir, source="garmin")
+        if args.quiet:
+            print(f"OK {out_file}")
+        else:
+            log_path = data_dir / "run_log.json"
+            print(f"  {'Appended to' if appended else 'Already in'} {log_path}")
 
 
 if __name__ == "__main__":
