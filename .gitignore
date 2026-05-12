@@ -19,6 +19,7 @@ users/*/data/last_analyzed_id.txt
 users/*/data/sleep_log.json
 users/*/data/personal_records.json
 users/*/data/run_*.fit
+users/*/data/polling_heartbeat.json
 __pycache__/
 *.pyc
 *.pyo

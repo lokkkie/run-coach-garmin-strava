@@ -31,7 +31,7 @@ import os
 import subprocess
 import sys
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -42,6 +42,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 ALLOWLIST_PATH = PROJECT_ROOT / "users" / "allowlist.json"
+
+# A heartbeat gap longer than this means polling has been silent for a suspicious
+# amount of time. Polling runs hourly, so 26h ≈ 26 missed cycles — well outside
+# normal noise (battery, transient API failure) but tight enough to catch a
+# multi-day Task Scheduler outage on the first resumed run.
+HEARTBEAT_STALE_AFTER = timedelta(hours=26)
 
 
 def extract_fit_bytes(raw: bytes) -> bytes:
@@ -91,6 +97,56 @@ def set_last_analyzed_id(data_dir: Path, activity_id: str):
     """Convenience pointer; run_log.json is the canonical source."""
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "last_analyzed_id.txt").write_text(activity_id, encoding="utf-8")
+
+
+def read_heartbeat(data_dir: Path) -> datetime | None:
+    """Read the last-successful-poll timestamp for a user, or None if absent/corrupt."""
+    hb_file = data_dir / "polling_heartbeat.json"
+    if not hb_file.exists():
+        return None
+    try:
+        data = json.loads(hb_file.read_text(encoding="utf-8"))
+        return datetime.fromisoformat(data["last_successful_poll"])
+    except (json.JSONDecodeError, KeyError, ValueError, OSError):
+        return None
+
+
+def write_heartbeat(data_dir: Path, platform: str, now: datetime | None = None):
+    """Record that this user's polling pipeline reached the platform successfully."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    ts = (now or datetime.now()).isoformat(timespec="seconds")
+    (data_dir / "polling_heartbeat.json").write_text(
+        json.dumps({"last_successful_poll": ts, "platform": platform}, indent=2),
+        encoding="utf-8",
+    )
+
+
+def heartbeat_gap_hours(last: datetime | None, now: datetime | None = None) -> float | None:
+    """Hours since the last successful poll, or None if no prior heartbeat."""
+    if last is None:
+        return None
+    return (((now or datetime.now()) - last).total_seconds()) / 3600
+
+
+def check_heartbeat_and_alert(user: dict, data_dir: Path, now: datetime | None = None):
+    """If the user's last successful poll was longer ago than HEARTBEAT_STALE_AFTER,
+    send a Telegram nudge so they know polling was silent. First-time-ever runs
+    (no prior heartbeat) are not alerted on — there's nothing to compare against."""
+    last = read_heartbeat(data_dir)
+    gap_hours = heartbeat_gap_hours(last, now=now)
+    if gap_hours is None:
+        return
+    threshold_hours = HEARTBEAT_STALE_AFTER.total_seconds() / 3600
+    if gap_hours <= threshold_hours:
+        return
+    log(f"[{user['name']}] heartbeat gap: {gap_hours:.1f}h since last successful poll")
+    send_telegram(
+        f"⚠️ <b>Polling resumed after a gap</b>\n"
+        f"Last successful check was <b>{gap_hours:.0f}h</b> ago. "
+        f"If you didn't expect a quiet stretch (PC was on, network up), "
+        f"check Task Scheduler history for failed runs.",
+        user.get("chat_id"),
+    )
 
 
 def send_telegram(message: str, chat_id: str | int | None):
@@ -195,6 +251,10 @@ def _run_garmin(user: dict, data_dir: Path):
         log(f"[{name}] Failed to fetch activities: {e}")
         return
 
+    # We talked to Garmin successfully — pipeline is alive. Record the heartbeat
+    # even if there's no new run to analyse.
+    write_heartbeat(data_dir, platform="garmin")
+
     if not activities:
         log(f"[{name}] No activities found.")
         return
@@ -269,6 +329,9 @@ def _run_strava(user: dict, data_dir: Path):
         log(f"[{name}] strava_latest_id returned no output.")
         return
 
+    # We talked to Strava successfully — pipeline is alive.
+    write_heartbeat(data_dir, platform="strava")
+
     activity_id = lines[0].strip()
     date_str = lines[1].strip() if len(lines) > 1 else "unknown"
     activity_name = lines[2].strip() if len(lines) > 2 else ""
@@ -298,6 +361,7 @@ def poll_user(user: dict, source_override: str | None):
     """Poll a single user. Errors are logged but don't propagate — one user's
     bad credentials or rate limit shouldn't abort the rest of the loop."""
     data_dir = data_dir_for(user)
+    check_heartbeat_and_alert(user, data_dir)
     source = source_override or get_data_source(data_dir)
     log(f"[{user['name']}] data_source: {source}")
 

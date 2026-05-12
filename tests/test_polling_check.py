@@ -193,6 +193,93 @@ class TestMainLoopFilter(unittest.TestCase):
             self.assertNotEqual(cm.exception.code, 0)
 
 
+class TestHeartbeat(unittest.TestCase):
+    """Polling heartbeat read/write and stale-gap alerting."""
+
+    def test_read_returns_none_when_missing(self):
+        import polling_check as pc
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(pc.read_heartbeat(Path(d)))
+
+    def test_write_then_read_roundtrip(self):
+        import polling_check as pc
+        from datetime import datetime
+        with tempfile.TemporaryDirectory() as d:
+            t = datetime(2026, 5, 13, 8, 0, 0)
+            pc.write_heartbeat(Path(d), "garmin", now=t)
+            self.assertEqual(pc.read_heartbeat(Path(d)), t)
+
+    def test_read_handles_corrupt_file(self):
+        import polling_check as pc
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "polling_heartbeat.json").write_text("not json")
+            self.assertIsNone(pc.read_heartbeat(Path(d)))
+
+    def test_read_handles_missing_key(self):
+        import polling_check as pc
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "polling_heartbeat.json").write_text('{"platform": "garmin"}')
+            self.assertIsNone(pc.read_heartbeat(Path(d)))
+
+    def test_gap_hours_none_when_no_prior(self):
+        import polling_check as pc
+        self.assertIsNone(pc.heartbeat_gap_hours(None))
+
+    def test_gap_hours_computed(self):
+        import polling_check as pc
+        from datetime import datetime
+        gap = pc.heartbeat_gap_hours(
+            datetime(2026, 5, 12, 8, 0),
+            now=datetime(2026, 5, 13, 10, 0),
+        )
+        self.assertEqual(gap, 26.0)
+
+    def test_no_alert_when_no_prior_heartbeat(self):
+        """First-ever run for a user: no comparison data, no alert."""
+        import polling_check as pc
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(pc, "send_telegram") as m_tg:
+            pc.check_heartbeat_and_alert({"name": "Alice", "chat_id": 1}, Path(d))
+        self.assertEqual(m_tg.call_count, 0)
+
+    def test_no_alert_when_within_threshold(self):
+        """Heartbeat 2h old is normal (hourly polling); no alert."""
+        import polling_check as pc
+        from datetime import datetime, timedelta
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(pc, "send_telegram") as m_tg:
+            now = datetime(2026, 5, 13, 10, 0)
+            pc.write_heartbeat(Path(d), "garmin", now=now - timedelta(hours=2))
+            pc.check_heartbeat_and_alert({"name": "Alice", "chat_id": 1}, Path(d), now=now)
+        self.assertEqual(m_tg.call_count, 0)
+
+    def test_alert_when_gap_exceeds_threshold(self):
+        """Heartbeat 30h old (past the 26h threshold) triggers a Telegram nudge."""
+        import polling_check as pc
+        from datetime import datetime, timedelta
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(pc, "send_telegram") as m_tg:
+            now = datetime(2026, 5, 13, 10, 0)
+            pc.write_heartbeat(Path(d), "garmin", now=now - timedelta(hours=30))
+            pc.check_heartbeat_and_alert({"name": "Alice", "chat_id": 1}, Path(d), now=now)
+        self.assertEqual(m_tg.call_count, 1)
+        msg, kwargs = m_tg.call_args.args, m_tg.call_args.kwargs
+        # send_telegram(message, chat_id) — chat_id is positional arg 2
+        self.assertEqual(msg[1], 1, "Alert must go to the user's chat_id")
+        self.assertIn("30h", msg[0])
+
+    def test_alert_exact_at_threshold_is_silent(self):
+        """Equal to the threshold (26h) is not 'past' — keep the alert tight."""
+        import polling_check as pc
+        from datetime import datetime, timedelta
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(pc, "send_telegram") as m_tg:
+            now = datetime(2026, 5, 13, 10, 0)
+            pc.write_heartbeat(Path(d), "garmin", now=now - timedelta(hours=26))
+            pc.check_heartbeat_and_alert({"name": "Alice", "chat_id": 1}, Path(d), now=now)
+        self.assertEqual(m_tg.call_count, 0)
+
+
 class TestAllowlistKevinDataDir(unittest.TestCase):
     """Kevin's data_dir in allowlist.json must point to users/Kevin/data, not .tmp."""
 
