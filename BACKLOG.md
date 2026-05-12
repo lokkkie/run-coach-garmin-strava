@@ -40,10 +40,6 @@ Deferred fixes from the project review. Update or remove entries as they get don
 
 **Why not now.** Adds a deployment step (`pip install -e .`) the user has to run once on the home PC. The current bootstrap is ugly but consistent and works without that step.
 
-### Strava OAuth setup → runcoach.strava (partial; deferred remainder)
-
-The Strava OAuth setup flow (browser redirect, code-exchange, write-side) still lives in `tools/strava_auth.py`. The read-side (`get_access_token`, `api_get`, `latest_run`, `fetch_activity` / `_streams` / `_laps`, `StravaRateLimited`) has moved to `runcoach.strava`. The remaining setup-flow code is tightly coupled to its CLI shape — localhost server, `webbrowser.open`, redirect URL parsing — so leaving it there is a deliberate choice; a future cleanup could split that into a reusable `runcoach.strava.exchange_authorization_code(code, user)` plus a CLI shim, but the gain is small.
-
 ### Negative-split sub-second precision (deferred from review review)
 
 `runcoach.fit.parse_fit` and `tools/strava_pull.py` both detect negative-split by averaging lap paces — currently via `pace_to_sec(pace_from_speed(...))`, a round-trip through `"M:SS"` strings that loses sub-second precision. For two halves that differ by < 1 sec/km the comparison can flip. Fix: keep lap speed/time as floats, compute mean speed per half, compare in float space. Pinned in `tests/test_metrics.py::test_roundtrip_loses_subsecond_precision`.
