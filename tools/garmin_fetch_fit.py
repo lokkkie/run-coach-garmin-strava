@@ -16,12 +16,11 @@ import sys
 import zipfile
 from pathlib import Path
 
-from dotenv import load_dotenv
 from garminconnect import Garmin
 
-from garmin_auth import get_garmin_client, _data_dir
-
-load_dotenv()
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from runcoach.paths import data_dir as _data_dir  # noqa: E402
+from garmin_auth import get_garmin_client  # noqa: E402
 
 QUIET = False
 

@@ -2,7 +2,8 @@
 Shared Garmin credential helper and per-user session factory.
 
 Library use:
-    from garmin_auth import get_garmin_client, _data_dir
+    from garmin_auth import get_garmin_client
+    from runcoach.paths import data_dir
 
 CLI usage:
     python tools/garmin_auth.py --save  --user Nicolas --email x@x.com --password secret
@@ -15,21 +16,15 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from garminconnect import Garmin
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
-
-
-def _data_dir(user: str | None) -> Path:
-    if user:
-        return PROJECT_ROOT / "users" / user / "data"
-    return PROJECT_ROOT / ".tmp"
+# Make runcoach importable when this file is invoked as `python tools/garmin_auth.py`.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from runcoach.paths import data_dir  # noqa: E402
 
 
 def _credentials_file(user: str) -> Path:
-    return _data_dir(user) / "garmin_credentials.json"
+    return data_dir(user) / "garmin_credentials.json"
 
 
 def get_garmin_credentials(user: str | None) -> tuple[str, str]:

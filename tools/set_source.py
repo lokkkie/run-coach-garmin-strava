@@ -14,16 +14,8 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
-
-
-def _data_dir(user: str | None) -> Path:
-    if user:
-        return PROJECT_ROOT / "users" / user / "data"
-    return PROJECT_ROOT / ".tmp"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from runcoach.paths import PROJECT_ROOT, data_dir as _data_dir  # noqa: E402
 
 
 def _load_state(state_file: Path) -> dict:

@@ -13,13 +13,12 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from googleapiclient.discovery import build
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import runcoach.paths  # noqa: F401, E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from google_auth import get_credentials
-
-load_dotenv()
+from google_auth import get_credentials  # noqa: E402
 
 HEADERS = [
     "Week", "Date", "Day", "Session Type", "Distance (km)",

@@ -31,18 +31,17 @@ import webbrowser
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from runcoach.paths import data_dir  # noqa: E402
 
 TOKEN_URL = "https://www.strava.com/api/v3/oauth/token"
 
 
 def _token_file(user: str | None = None) -> Path:
-    if user:
-        return PROJECT_ROOT / "users" / user / "data" / "strava_token.json"
-    return PROJECT_ROOT / ".tmp" / "strava_token.json"
+    return data_dir(user) / "strava_token.json"
+
+
 AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
 REDIRECT_PORT = 53682
 REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}"

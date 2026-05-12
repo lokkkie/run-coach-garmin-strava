@@ -28,20 +28,27 @@ Deferred fixes from the project review. Update or remove entries as they get don
 
 ## Refactor
 
-### Tools/ package layout (deferred from review fix #6)
+### pyproject.toml so `runcoach` is importable without sys.path hacks
 
-**Current state.** `tools/` is a flat directory of 21 scripts. Each one re-imports `load_dotenv`, redefines `PROJECT_ROOT`, redefines `_data_dir`, and uses `sys.path.insert` hacks to import siblings (e.g. `telegram_bridge.py` reaches into `tools/` to import `sheets_read`).
+**Current state.** Step 1 of the package refactor is done — `runcoach/paths.py` exists and every tool now imports `PROJECT_ROOT` / `data_dir` / `load_allowlist` from there. But tools still bootstrap by `sys.path.insert(0, str(Path(__file__).resolve().parent.parent))` before importing runcoach. That's because tools are invoked as `python tools/foo.py` and Python doesn't auto-add the script's parent to `sys.path`.
 
-**Risk.** Low (works today), but every new tool inherits the boilerplate, the `sys.path` tricks are fragile to cwd changes, and the duplicated `_data_dir` / `append_to_log` definitions drift apart (already happened once — `analyze_fit` and `strava_pull` had subtly different dedup logic).
+**Plan.**
+1. Add a minimal `pyproject.toml` with `[project] name = "runcoach"` and `[tool.setuptools.packages.find]`.
+2. Run `pip install -e .` once on the host.
+3. Delete the `sys.path.insert` lines at the top of every migrated tool.
+4. Replace `import runcoach.paths  # noqa: F401` (currently used just to trigger `load_dotenv`) with explicit imports from `runcoach.paths`.
 
-**Plan when this gets prioritized.**
+**Why not now.** Adds a deployment step (`pip install -e .`) the user has to run once on the home PC. The current bootstrap is ugly but consistent and works without that step.
 
-1. Create `runcoach/` package (top-level next to `tools/`): `runcoach/{paths,auth,sheets,fit,run_log,telegram_format}.py`.
-2. Move shared helpers there (`_data_dir`, `load_allowlist`, `append_to_log`, FIT helpers, `smart_split` / tag-balancing).
-3. Convert `tools/*.py` into thin CLI wrappers that import from `runcoach.*`. Same external behavior, no boilerplate.
-4. Drop every `sys.path.insert` in the project.
+### Continued module extraction (the rest of review fix #6)
 
-**Why not now.** Touches every tool in the project. Best done in a dedicated session with thorough regression testing.
+`runcoach/paths.py` is in place. Still to extract:
+- `runcoach/run_log.py` — the append-with-dedup logic duplicated between `analyze_fit.py` and `strava_pull.py`.
+- `runcoach/fit.py` — `pace_from_speed`, `get_hr_zone`, `fit_local_date_str`, the FIT parsing.
+- `runcoach/telegram_format.py` — `smart_split`, `_open_tags_at`, `_split_is_inside_tag`, `_HTML_TAG_RE`, `_TELEGRAM_HTML_TAGS`.
+- `runcoach/garmin.py` + `runcoach/strava.py` — auth and activity fetching consolidated.
+
+Each is a small targeted commit (the paths migration was the riskiest one — every tool touched, all 49 tests still pass, smoke-tested polling end-to-end).
 
 ---
 

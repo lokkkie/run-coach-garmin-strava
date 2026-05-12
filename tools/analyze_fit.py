@@ -8,12 +8,15 @@ Also appends the run to {data_dir}/run_log.json (append-only benchmark history).
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import fitparse
 
-from garmin_auth import _data_dir
+# Make runcoach importable when invoked as `python tools/analyze_fit.py`.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from runcoach.paths import data_dir as _data_dir  # noqa: E402
 
 
 # Garmin HR zone boundaries (% of max HR). Adjust if Kevin's max HR is known.

@@ -22,7 +22,10 @@ from pathlib import Path
 
 import requests
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# runcoach.paths is imported for its side-effect of loading .env;
+# strava_auth itself reads env vars and per-user token files via runcoach.
+from runcoach.paths import data_dir as _data_dir  # noqa: F401, E402
 from strava_auth import get_access_token  # noqa: E402
 
 API_URL = "https://www.strava.com/api/v3/athlete/activities"

@@ -34,14 +34,15 @@ import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from dotenv import load_dotenv
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from runcoach.paths import (  # noqa: E402
+    PROJECT_ROOT,
+    ALLOWLIST_PATH,
+    data_dir_for,
+    load_allowlist,
+)
 
 QUIET = False
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
-
-ALLOWLIST_PATH = PROJECT_ROOT / "users" / "allowlist.json"
 
 # A heartbeat gap longer than this means polling has been silent for a suspicious
 # amount of time. Polling runs hourly, so 26h ≈ 26 missed cycles — well outside
@@ -69,15 +70,6 @@ def log(msg: str):
     if QUIET:
         return
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
-
-
-def load_allowlist() -> list[dict]:
-    with open(ALLOWLIST_PATH, encoding="utf-8") as f:
-        return json.load(f)["users"]
-
-
-def data_dir_for(user: dict) -> Path:
-    return PROJECT_ROOT / user["data_dir"]
 
 
 def activity_in_run_log(data_dir: Path, activity_id: str) -> bool:

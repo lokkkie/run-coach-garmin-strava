@@ -21,12 +21,11 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from garminconnect import Garmin
 
-from garmin_auth import get_garmin_client
-
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import runcoach.paths  # noqa: F401, E402
+from garmin_auth import get_garmin_client  # noqa: E402
 
 # Quiet down the SSO/login chatter that garminconnect prints
 for name in ("garminconnect", "garth", "urllib3"):

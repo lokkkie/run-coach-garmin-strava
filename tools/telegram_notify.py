@@ -12,9 +12,9 @@ import sys
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import runcoach.paths  # noqa: F401, E402
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 MAX_LEN = 4000

@@ -39,7 +39,6 @@ try:
 except ImportError:
     pass
 
-from dotenv import load_dotenv
 from telegram import BotCommand, BotCommandScopeChat, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
@@ -52,10 +51,11 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
-PROJECT_ROOT = Path.cwd()
-load_dotenv(PROJECT_ROOT / ".env")
+# Resolve project root via runcoach.paths (__file__-based, cwd-independent).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from runcoach.paths import PROJECT_ROOT, ALLOWLIST_PATH  # noqa: E402
 
-# Allow importing sibling tools
+# Allow importing sibling tools (sheets_read still lives in tools/).
 sys.path.insert(0, str(PROJECT_ROOT / "tools"))
 from sheets_read import read_sessions  # noqa: E402
 
@@ -70,7 +70,6 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 MAX_TG_LEN = 4000  # Telegram per-message limit is 4096; leave headroom
 
-ALLOWLIST_PATH = PROJECT_ROOT / "users" / "allowlist.json"
 CONTACT_LOG_PATH = PROJECT_ROOT / "users" / "contact_log.json"
 
 _contact_log_lock = asyncio.Lock()

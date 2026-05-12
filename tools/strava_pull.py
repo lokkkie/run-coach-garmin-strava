@@ -17,19 +17,10 @@ import time
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from runcoach.paths import data_dir as _data_dir  # noqa: E402
 from strava_auth import get_access_token  # noqa: E402
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
-
-
-def _data_dir(user: str | None) -> Path:
-    if user:
-        return PROJECT_ROOT / "users" / user / "data"
-    return PROJECT_ROOT / ".tmp"
 
 API_BASE = "https://www.strava.com/api/v3"
 
