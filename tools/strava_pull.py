@@ -13,10 +13,7 @@ Output:
 import argparse
 import json
 import sys
-import time
 from pathlib import Path
-
-import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runcoach.paths import data_dir as _data_dir  # noqa: E402
@@ -27,33 +24,13 @@ from runcoach.metrics import (  # noqa: E402
     pace_from_speed,
     pace_to_sec,
 )
-from strava_auth import get_access_token  # noqa: E402
-
-API_BASE = "https://www.strava.com/api/v3"
-
-
-# ──────────────────────────────────────────────────────────────────────
-# Strava API calls
-# ──────────────────────────────────────────────────────────────────────
-def _api_get(path: str, token: str, params: dict | None = None) -> dict:
-    resp = requests.get(
-        f"{API_BASE}{path}",
-        headers={"Authorization": f"Bearer {token}"},
-        params=params,
-        timeout=30,
-    )
-    if resp.status_code == 429:
-        raise RuntimeError("Strava rate-limited (429)")
-    resp.raise_for_status()
-    return resp.json()
-
-
-def fetch_latest_run_id(token: str) -> str:
-    activities = _api_get("/athlete/activities", token, {"per_page": 5})
-    for a in activities:
-        if a.get("type") == "Run" or a.get("sport_type") == "Run":
-            return str(a["id"])
-    raise RuntimeError("No recent running activity found on Strava")
+from runcoach.strava import (  # noqa: E402
+    fetch_activity,
+    fetch_laps,
+    fetch_streams,
+    get_access_token,
+    latest_run,
+)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -173,23 +150,23 @@ def main():
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    activity_id = args.activity_id or fetch_latest_run_id(token)
+    if args.activity_id:
+        activity_id = args.activity_id
+    else:
+        latest = latest_run(token)
+        if latest is None:
+            print("ERROR: No recent running activity found on Strava", file=sys.stderr)
+            sys.exit(1)
+        activity_id = str(latest["id"])
     info(f"Fetching Strava activity {activity_id}...")
 
-    activity = _api_get(f"/activities/{activity_id}", token)
+    activity = fetch_activity(token, activity_id)
     if activity.get("type") != "Run" and activity.get("sport_type") != "Run":
         print(f"ERROR: Activity {activity_id} is not a run", file=sys.stderr)
         sys.exit(1)
 
-    streams = _api_get(
-        f"/activities/{activity_id}/streams",
-        token,
-        params={
-            "keys": "heartrate,velocity_smooth,cadence,altitude,time",
-            "key_by_type": "true",
-        },
-    )
-    laps = _api_get(f"/activities/{activity_id}/laps", token)
+    streams = fetch_streams(token, activity_id)
+    laps = fetch_laps(token, activity_id)
 
     date_str = activity.get("start_date_local", "")[:10] or "unknown"
     session = build_session(activity)

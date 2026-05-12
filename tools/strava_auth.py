@@ -1,15 +1,19 @@
 """
-Strava OAuth helper.
+Strava OAuth setup CLI. The read-side helpers (get_access_token, api_get,
+latest_run, fetch_*) live in `runcoach.strava`; this script handles only the
+one-time consent flow that writes the per-user token file.
 
-Two modes:
+Modes:
   --setup        Run the user-consent OAuth flow (opens a local server,
                  prints an authorize URL, captures the redirect, exchanges
-                 code → tokens, writes .tmp/strava_token.json).
+                 code → tokens, writes {data_dir}/strava_token.json).
+  --manual       Print the auth URL for a remote/mobile user — they open
+                 it, authorize, paste the redirect URL back via --redirect-url.
+  --redirect-url <url>
+                 Complete the manual flow with the pasted redirect URL.
+  (default)      Print the current valid access token (handy for ad-hoc curl).
 
-  Default       Library use: import and call get_access_token() to get a
-                valid bearer token (auto-refreshes if expired).
-
-Tokens file format (.tmp/strava_token.json):
+Token file format ({data_dir}/strava_token.json):
   {
     "access_token":  "...",
     "refresh_token": "...",
@@ -20,7 +24,6 @@ Tokens file format (.tmp/strava_token.json):
 
 import argparse
 import http.server
-import json
 import os
 import socketserver
 import sys
@@ -33,76 +36,17 @@ from pathlib import Path
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from runcoach.paths import data_dir  # noqa: E402
-
-TOKEN_URL = "https://www.strava.com/api/v3/oauth/token"
-
-
-def _token_file(user: str | None = None) -> Path:
-    return data_dir(user) / "strava_token.json"
-
+from runcoach.strava import (  # noqa: E402
+    TOKEN_URL,
+    _save_tokens,
+    _token_file,
+    get_access_token,
+)
 
 AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
 REDIRECT_PORT = 53682
 REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}"
 SCOPE = "read,activity:read_all"
-
-
-def _load_tokens(token_file: Path) -> dict | None:
-    if token_file.exists():
-        with open(token_file, encoding="utf-8") as f:
-            return json.load(f)
-    return None
-
-
-def _save_tokens(tokens: dict, token_file: Path):
-    token_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(token_file, "w", encoding="utf-8") as f:
-        json.dump(tokens, f, indent=2)
-
-
-def _refresh(client_id: str, client_secret: str, refresh_token: str) -> dict:
-    resp = requests.post(
-        TOKEN_URL,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        },
-        timeout=15,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def get_access_token(user: str | None = None) -> str:
-    """Public API: return a currently-valid access token, refreshing if needed."""
-    client_id = os.getenv("STRAVA_CLIENT_ID")
-    client_secret = os.getenv("STRAVA_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        raise RuntimeError(
-            "STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET missing in .env. "
-            "Create an app at https://www.strava.com/settings/api"
-        )
-
-    token_file = _token_file(user)
-    tokens = _load_tokens(token_file)
-    if not tokens:
-        raise RuntimeError(
-            f"No Strava tokens at {token_file}. Run: python tools/strava_auth.py --setup"
-            + (f" --user {user}" if user else "")
-        )
-
-    # Refresh if access token expires within 60 seconds
-    if int(tokens.get("expires_at", 0)) - 60 < int(time.time()):
-        new_tokens = _refresh(client_id, client_secret, tokens["refresh_token"])
-        # Strava sometimes rotates the refresh_token — preserve athlete info
-        new_tokens["athlete"] = tokens.get("athlete", new_tokens.get("athlete"))
-        _save_tokens(new_tokens, token_file)
-        tokens = new_tokens
-
-    return tokens["access_token"]
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -144,6 +88,22 @@ class _RedirectHandler(http.server.BaseHTTPRequestHandler):
         return  # silence default access log
 
 
+def _post_authorization_code(client_id: str, client_secret: str, code: str) -> dict:
+    """Exchange an OAuth authorization code for an access + refresh token bundle."""
+    resp = requests.post(
+        TOKEN_URL,
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 def _setup(user: str | None = None):
     client_id = os.getenv("STRAVA_CLIENT_ID")
     client_secret = os.getenv("STRAVA_CLIENT_SECRET")
@@ -165,7 +125,7 @@ def _setup(user: str | None = None):
     httpd = socketserver.TCPServer(("localhost", REDIRECT_PORT), _RedirectHandler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
-    print(f"Opening browser for Strava authorization...")
+    print("Opening browser for Strava authorization...")
     print(f"If the browser does not open, paste this URL manually:\n  {auth_url}\n")
     webbrowser.open(auth_url)
 
@@ -183,21 +143,8 @@ def _setup(user: str | None = None):
         print(f"ERROR: Strava returned error: {_received['error']}", file=sys.stderr)
         sys.exit(1)
 
-    code = _received["code"]
     print("Got authorization code, exchanging for tokens...")
-    resp = requests.post(
-        TOKEN_URL,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-        },
-        timeout=15,
-    )
-    resp.raise_for_status()
-    tokens = resp.json()
-
+    tokens = _post_authorization_code(client_id, client_secret, _received["code"])
     _save_tokens(tokens, token_file)
     athlete = tokens.get("athlete", {})
     name = f"{athlete.get('firstname', '')} {athlete.get('lastname', '')}".strip()
@@ -209,11 +156,8 @@ def _setup(user: str | None = None):
 
 
 def _manual_exchange(user: str | None = None):
-    """
-    Print the auth URL for the user to open on their device.
-    Then accept the full redirect URL (pasted back) and extract the code.
-    Useful when the redirect cannot reach localhost (e.g. remote/mobile users).
-    """
+    """Print the auth URL for a user to open on their device. They then paste
+    the full redirect URL back via --redirect-url to finish the exchange."""
     client_id = os.getenv("STRAVA_CLIENT_ID")
     client_secret = os.getenv("STRAVA_CLIENT_SECRET")
     if not client_id or not client_secret:
@@ -236,7 +180,7 @@ def _manual_exchange(user: str | None = None):
 
 
 def _exchange_code(redirect_url: str, user: str | None = None):
-    """Exchange an authorization code from a redirect URL for tokens."""
+    """Exchange an authorization code from a pasted redirect URL for tokens."""
     client_id = os.getenv("STRAVA_CLIENT_ID")
     client_secret = os.getenv("STRAVA_CLIENT_SECRET")
 
@@ -249,20 +193,8 @@ def _exchange_code(redirect_url: str, user: str | None = None):
         print("ERROR: No authorization code found in the URL.", file=sys.stderr)
         sys.exit(1)
 
-    code = params["code"][0]
     print("Exchanging authorization code for tokens...")
-    resp = requests.post(
-        TOKEN_URL,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-        },
-        timeout=15,
-    )
-    resp.raise_for_status()
-    tokens = resp.json()
+    tokens = _post_authorization_code(client_id, client_secret, params["code"][0])
 
     token_file = _token_file(user)
     _save_tokens(tokens, token_file)
