@@ -128,6 +128,60 @@ class TestNonOwnerToolRestriction(unittest.TestCase):
                          "Non-owner session must apply the full denylist")
 
 
+class TestBridgeSingletonLock(unittest.TestCase):
+    """The bridge must refuse to start if another bridge is already running.
+    Prevents the dual-polling failure mode where two telegram_bridge.py
+    processes share Telegram's getUpdates queue and reply non-deterministically.
+    """
+
+    def test_first_acquisition_returns_socket(self):
+        import socket as _socket
+        import telegram_bridge as tb
+        sock = tb._acquire_bridge_lock(port=0)  # ephemeral; never conflicts
+        try:
+            self.assertIsNotNone(sock)
+            self.assertIsInstance(sock, _socket.socket)
+        finally:
+            if sock is not None:
+                sock.close()
+
+    def test_second_acquisition_returns_none(self):
+        import socket as _socket
+        import telegram_bridge as tb
+
+        # Pre-bind a port to simulate another bridge already holding it.
+        holder = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        holder.bind(("127.0.0.1", 0))
+        holder.listen(1)
+        port = holder.getsockname()[1]
+
+        try:
+            sock = tb._acquire_bridge_lock(port=port)
+            self.assertIsNone(sock,
+                              "Second acquisition on a held port must return None — "
+                              "a stray `python tools/telegram_bridge.py` while the "
+                              "supervisor's child is alive should fail this way.")
+        finally:
+            holder.close()
+
+    def test_release_lets_next_acquisition_succeed(self):
+        """Once the holding process dies (or closes the socket), a fresh
+        bridge launch must be able to take the lock — confirms there's no
+        TIME_WAIT trap that would block legitimate restarts."""
+        import telegram_bridge as tb
+        first = tb._acquire_bridge_lock(port=0)
+        self.assertIsNotNone(first)
+        port = first.getsockname()[1]
+        first.close()
+
+        second = tb._acquire_bridge_lock(port=port)
+        try:
+            self.assertIsNotNone(second)
+        finally:
+            if second is not None:
+                second.close()
+
+
 class TestBaselineSchemaAlignment(unittest.TestCase):
     """Fix #3: onboarding skill must produce all keys the running-coach skill requires."""
 

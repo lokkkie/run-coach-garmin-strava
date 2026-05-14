@@ -22,6 +22,7 @@ import asyncio
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import logging
@@ -79,7 +80,35 @@ _allowlist_lock = asyncio.Lock()
 # backs off and respawns). 42 specifically signals "intentional restart".
 RESTART_EXIT_CODE = 42
 
+# Singleton lock for the bridge itself. The supervisor uses 48733; the bridge
+# uses 48734 so the two layers can lock independently. Without this, a stray
+# `python tools/telegram_bridge.py` would happily run alongside the supervisor's
+# child and both would poll Telegram's getUpdates, breaking each other's
+# delivery (Telegram only delivers each update to one long-poll at a time, so
+# replies become non-deterministic). Binding fails fast if another bridge is
+# already alive.
+BRIDGE_SINGLETON_PORT = 48734
+
 _NAME_RE = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _acquire_bridge_lock(port: int = BRIDGE_SINGLETON_PORT) -> socket.socket | None:
+    """Bind 127.0.0.1:`port` for this bridge's lifetime.
+    Returns the socket on success, None if another bridge already holds it.
+    Caller must keep the socket alive — closing releases the lock.
+    Mirrors `bridge_supervisor.acquire_singleton_lock`; both layers lock
+    independently so a direct bridge launch is also rejected, not just a
+    direct second supervisor launch."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # Deliberately NOT setting SO_REUSEADDR — bind must fail if another bridge
+    # is already bound, which is the entire point of this lock.
+    try:
+        sock.bind(("127.0.0.1", port))
+        sock.listen(1)
+        return sock
+    except OSError:
+        sock.close()
+        return None
 
 
 def load_allowlist() -> list[dict]:
@@ -909,6 +938,20 @@ def main():
     if missing:
         print(f"ERROR: missing env vars in .env: {', '.join(missing)}", file=sys.stderr)
         sys.exit(1)
+
+    # Bridge-level singleton lock. Refuses to start if another bridge already
+    # holds the port — prevents two bridges from polling Telegram concurrently.
+    # Held by reference for the lifetime of main(); the OS releases it on exit.
+    lock_sock = _acquire_bridge_lock()
+    if lock_sock is None:
+        log.error(
+            "Another telegram_bridge is already running on this machine "
+            "(port %d in use). Exiting to avoid Telegram getUpdates conflicts. "
+            "If you want this bridge instead, kill the existing one first.",
+            BRIDGE_SINGLETON_PORT,
+        )
+        sys.exit(1)
+    log.info("Bridge singleton lock acquired on 127.0.0.1:%d", BRIDGE_SINGLETON_PORT)
 
     app = (
         Application.builder()
